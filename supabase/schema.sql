@@ -31,6 +31,7 @@ as $$
          ) = (select value from private.settings where key = 'group_key');
 $$;
 
+alter table private.settings enable row level security;
 revoke all on private.settings from anon, authenticated;
 grant usage on schema private to anon, authenticated;
 grant execute on function private.has_group_key() to anon, authenticated;
