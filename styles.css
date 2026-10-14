@@ -308,3 +308,4 @@ pre.plan { white-space: pre-wrap; font: inherit; margin: 0; background: var(--su
 .fab[hidden] { display: none; }
 .game-row .seg { justify-self: start; }
 @media (max-width: 560px) { .game-row .seg { justify-self: stretch; } }
+.tabs[hidden] { display: none; }

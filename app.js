@@ -236,6 +236,7 @@
   // =====================================================================
   const VIEWS = { dashboard: viewDashboard, matchup: viewMatchup, history: viewHistory, deck: viewDeck, opponents: viewOpponents, add: viewAdd };
   function route() {
+    if (!S.ready) return;
     const [name, arg] = (location.hash.replace("#", "") || "dashboard").split("/");
     const v = VIEWS[name] ? name : "dashboard";
     $$("#tabs a").forEach((a) => a.classList.toggle("active", a.dataset.view === v));
@@ -1012,6 +1013,7 @@
       <button class="btn primary big">Entra</button>
     </form></div>`;
     $("#fab").hidden = true;
+    $("#tabs").hidden = true;
     $("#login").onsubmit = (e) => {
       e.preventDefault();
       const key = e.target.key.value.trim();
@@ -1039,7 +1041,9 @@
       }
       $("#view").innerHTML = `<p class="muted">Caricamento…</p>`;
       await reload();
+      $("#tabs").hidden = false;
       renderWho();
+      S.ready = true;
       route();
     } catch (err) {
       console.error(err);
