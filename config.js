@@ -6,5 +6,5 @@
 window.APP_CONFIG = {
   SUPABASE_URL: "https://uqcixuwsheajcsroiipq.supabase.co",
   SUPABASE_KEY: "sb_publishable_QMiUVcV4XO1zAfIW4J3dUw_aSvJ8dbs",
-  APP_NAME: "Bant Meta Tracker",
+  APP_NAME: "Meta Tracker",
 };

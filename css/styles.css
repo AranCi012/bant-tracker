@@ -309,3 +309,11 @@ pre.plan { white-space: pre-wrap; font: inherit; margin: 0; background: var(--su
 .game-row .seg { justify-self: start; }
 @media (max-width: 560px) { .game-row .seg { justify-self: stretch; } }
 .tabs[hidden] { display: none; }
+
+/* ---------- v2: selettore mazzo, riepilogo sideboard ---------- */
+.deck-switch-wrap { display: flex; align-items: center; gap: 6px; }
+.deck-switch-wrap select { width: auto; max-width: 180px; padding: 5px 8px; font-weight: 600; }
+.sb-sum { display: flex; flex-wrap: wrap; gap: 4px; }
+.sb-sum span { font-size: .8rem; padding: 1px 7px; border-radius: 6px; }
+.sb-in { background: color-mix(in srgb, var(--win) 14%, transparent); color: var(--win); }
+.sb-out { background: color-mix(in srgb, var(--loss) 14%, transparent); color: var(--loss); }
