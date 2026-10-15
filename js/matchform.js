@@ -22,6 +22,7 @@
         <div class="field full">
           <span class="small muted" style="font-weight:500">Game</span>
           <div class="games" id="games"></div>
+          <div class="sb-area" id="sb-area"></div>
         </div>
         <label class="field">Giocatore
           <input name="player" list="pl-dl" value="${esc(m.player ?? S.me)}" required placeholder="Il tuo nome">
@@ -47,6 +48,102 @@
     </form>`;
   }
 
+  // ---------------------------------------------------------------------
+  //  Editor di sideboarding (IN / OUT con stepper) — condiviso con la vista
+  //  sideboard.js (A.sbEditor). Funziona inline, mai in un modal.
+  //  opts: { version: () => versione|undefined, value: {in:[],out:[]},
+  //          onChange(val), buttons: [{label, run(editor)}], onClose() }
+  // ---------------------------------------------------------------------
+  const MINUS = "−";
+  const cleanList = (l) => (l || []).filter((c) => c && c.q > 0).map((c) => ({ q: c.q, name: c.name }));
+
+  function sbSummaryHTML(sb, empty) {
+    const i = cleanList(sb && sb.in), o = cleanList(sb && sb.out);
+    if (!i.length && !o.length) return empty == null ? `<span class="muted small">—</span>` : empty;
+    return `<span class="sb-sum">${i.map((c) => `<span class="sb-in" data-card="${esc(c.name)}">+${c.q} ${esc(c.name)}</span>`).join("")}${o.map((c) => `<span class="sb-out" data-card="${esc(c.name)}">${MINUS}${c.q} ${esc(c.name)}</span>`).join("")}</span>`;
+  }
+
+  function sbEditor(host, opts) {
+    const st = { in: new Map(), out: new Map() };
+    const load = (v) => { st.in = A.listMap(cleanList(v && v.in)); st.out = A.listMap(cleanList(v && v.out)); };
+    load(opts.value);
+    const src = (side) => {
+      const v = opts.version && opts.version();
+      return v ? A.listMap(A.parseList(side === "in" ? v.sideboard : v.maindeck)) : new Map();
+    };
+    const api = {
+      get: () => ({ in: [...st.in.values()].filter((c) => c.q > 0).map((c) => ({ q: c.q, name: c.name })), out: [...st.out.values()].filter((c) => c.q > 0).map((c) => ({ q: c.q, name: c.name })) }),
+      set(v) { load(v); render(); notify(); },
+    };
+    const notify = () => opts.onChange && opts.onChange(api.get());
+
+    function col(side) {
+      const s = src(side), cur = st[side];
+      const keys = [...s.keys(), ...[...cur.keys()].filter((k) => !s.has(k))];
+      const total = [...cur.values()].reduce((a, c) => a + c.q, 0);
+      const rows = keys.map((k) => {
+        const sc = s.get(k), c = cur.get(k), q = c ? c.q : 0, name = (sc || c).name, max = sc ? sc.q : 99;
+        return `<div class="sbe-row${q ? " on" : ""}">
+          <span class="sbe-name" data-card="${esc(name)}">${esc(name)}${sc ? "" : ` <em class="muted">(extra)</em>`}</span>
+          <span class="sbe-max">${sc ? "/" + max : ""}</span>
+          <span class="sbe-step">
+            <button type="button" data-act="dec" data-side="${side}" data-k="${esc(k)}" aria-label="Meno"${q ? "" : " disabled"}>${MINUS}</button>
+            <b>${q}</b>
+            <button type="button" data-act="inc" data-side="${side}" data-k="${esc(k)}" aria-label="Più"${q >= max ? " disabled" : ""}>+</button>
+          </span></div>`;
+      }).join("");
+      return `<div class="sbe-col ${side}">
+        <h4>${side === "in" ? "IN (dalla sideboard)" : "OUT (dal main)"} <span class="num">${total}</span></h4>
+        <div class="sbe-list">${rows || `<p class="muted small" style="margin:4px 0">${opts.version && opts.version() ? "Nessuna carta in lista." : "Nessuna lista collegata: aggiungi le carte a mano."}</p>`}</div>
+        <div class="sbe-add"><input data-add="${side}" placeholder="Altra carta…" autocomplete="off"><button type="button" class="btn" data-act="add" data-side="${side}">+ Aggiungi</button></div>
+      </div>`;
+    }
+    function render() {
+      const inN = [...st.in.values()].reduce((a, c) => a + c.q, 0), outN = [...st.out.values()].reduce((a, c) => a + c.q, 0);
+      const btns = (opts.buttons || []).map((b, i) => `<button type="button" class="btn" data-act="custom" data-i="${i}">${esc(b.label)}</button>`).join("");
+      host.innerHTML = `<div class="sbe">
+        <div class="sbe-cols">${col("in")}${col("out")}</div>
+        ${inN !== outN ? `<p class="small warn" style="margin:6px 0">Attenzione: ${inN} IN ma ${outN} OUT.</p>` : ""}
+        <div class="sbe-actions">${btns}<button type="button" class="btn" data-act="clear">Svuota</button>${opts.onClose ? `<button type="button" class="btn primary" data-act="close">Chiudi</button>` : ""}</div>
+      </div>`;
+      if (A.cards && A.cards.bindHover) A.cards.bindHover(host);
+    }
+    function add(side) {
+      const inp = host.querySelector(`input[data-add="${side}"]`);
+      const name = inp ? inp.value.trim().replace(/\s+/g, " ") : "";
+      if (!name) return;
+      const k = A.cardKey(name), s = src(side).get(k), cur = st[side].get(k);
+      if (cur) { if (cur.q < (s ? s.q : 99)) cur.q++; }
+      else st[side].set(k, { name: s ? s.name : name, q: 1 });
+      render(); notify();
+    }
+    host.onclick = (e) => {
+      const b = e.target.closest("button[data-act]"); if (!b || b.disabled || !host.contains(b)) return;
+      const act = b.dataset.act, side = b.dataset.side, k = b.dataset.k;
+      if (act === "inc" || act === "dec") {
+        const s = src(side).get(k), cur = st[side].get(k);
+        if (act === "inc") { const max = s ? s.q : 99; if (cur) { if (cur.q < max) cur.q++; } else st[side].set(k, { name: s.name, q: 1 }); }
+        else if (cur) { cur.q--; if (cur.q <= 0) st[side].delete(k); }
+        render(); notify();
+      } else if (act === "add") add(side);
+      else if (act === "clear") { st.in.clear(); st.out.clear(); render(); notify(); }
+      else if (act === "close") opts.onClose && opts.onClose();
+      else if (act === "custom") { const c = (opts.buttons || [])[+b.dataset.i]; if (c) c.run(api); }
+    };
+    host.onkeydown = (e) => {
+      if (e.key === "Enter" && e.target.matches("input[data-add]")) { e.preventDefault(); add(e.target.dataset.add); }
+    };
+    render();
+    return api;
+  }
+
+  // Sideboarding previsto dalla guida per (archetipo, play/draw)
+  function guideSb(archId, play) {
+    const g = archId ? A.guideFor(archId) : null;
+    if (!g || play == null) return { in: [], out: [] };
+    return { in: A.parseList(play ? g.play_in : g.draw_in), out: A.parseList(play ? g.play_out : g.draw_out) };
+  }
+
   function bindMatchForm(root, m, onSaved) {
     const form = $("#match-form", root);
     // Stato delle game: r = W/L/D/null, p = true (play) / false (draw), auto = calcolato
@@ -57,6 +154,51 @@
     ];
     // Regola: chi perde la game precedente sceglie e va on the play; dopo un pareggio sceglie di nuovo lo stesso giocatore.
     const nextPlay = (prev) => (prev.r === "L" ? true : prev.r === "W" ? false : prev.p);
+    // Sideboarding di G2/G3 (indici 1 e 2). manual = modificato a mano: la guida non lo sovrascrive.
+    const mkSb = (sb) => ({ in: cleanList(sb && sb.in), out: cleanList(sb && sb.out), manual: !!m.id, orig: !!sb, open: false });
+    const SB = [null, mkSb(m.sb2), mkSb(m.sb3)];
+    function applyGuide() {
+      for (let i = 1; i < 3; i++) {
+        if (SB[i].manual) continue;
+        const g = guideSb(form.archetype_id.value, G[i].p);
+        SB[i].in = g.in; SB[i].out = g.out;
+      }
+    }
+    function renderSB() {
+      const area = $("#sb-area", root);
+      area.innerHTML = [1, 2].map((i) => (G[i].r ? `<div class="sb-box" data-sbi="${i}">
+        <div class="sb-line"><span class="small muted"><b>G${i + 1}</b> Sideboard:</span>
+          <span data-sbsum>${sbSummaryHTML(SB[i], `<span class="muted small">Nessuna sidata registrata</span>`)}</span>
+          <button type="button" class="btn sm" data-sbtoggle="${i}">${SB[i].open ? "Chiudi" : (SB[i].in.length || SB[i].out.length ? "Modifica" : "Aggiungi")}</button></div>
+        <div class="sb-panel"${SB[i].open ? "" : " hidden"}></div></div>` : "")).join("");
+      for (const i of [1, 2]) {
+        const box = area.querySelector(`[data-sbi="${i}"]`);
+        if (!box || !SB[i].open) continue;
+        const side = G[i].p === false ? "draw" : "play";
+        const buttons = [{ label: `Usa guida (${side})`, run(ed) { const g = guideSb(form.archetype_id.value, G[i].p); ed.set(g); SB[i].manual = false; } }];
+        if (i === 2) buttons.push({ label: "Uguale a G2", run(ed) { ed.set({ in: SB[1].in, out: SB[1].out }); } });
+        sbEditor(box.querySelector(".sb-panel"), {
+          version: () => A.versionById(form.decklist_id.value),
+          value: SB[i],
+          buttons,
+          onChange(v) {
+            SB[i].in = v.in; SB[i].out = v.out; SB[i].manual = true;
+            box.querySelector("[data-sbsum]").innerHTML = sbSummaryHTML(SB[i], `<span class="muted small">Nessuna sidata registrata</span>`);
+          },
+          onClose() { SB[i].open = false; renderSB(); },
+        });
+      }
+    }
+    $("#sb-area", root).addEventListener("click", (e) => {
+      const b = e.target.closest("[data-sbtoggle]"); if (!b) return;
+      const i = +b.dataset.sbtoggle; SB[i].open = !SB[i].open; renderSB();
+    });
+    form.decklist_id.addEventListener("change", renderSB);
+    form.archetype_id.addEventListener("change", () => {
+      for (let i = 1; i < 3; i++) if (!SB[i].orig) SB[i].manual = false;
+      render();
+    });
+
     function recompute() {
       for (let i = 1; i < 3; i++) if (G[i].auto) G[i].p = G[i - 1].r ? nextPlay(G[i - 1]) : null;
     }
@@ -84,6 +226,8 @@
           </div>
         </div>`;
       }).join("") + `<span class="muted small">Play/draw di G2 e G3 si compilano da soli (chi perde va on the play): correggili se serve.</span>`;
+      applyGuide();
+      renderSB();
       const fake = { g1: G[0].r, g2: G[1].r, g3: G[2].r };
       const gs = A.gamesOf(fake);
       const prev = $("#res-prev", root);
@@ -112,6 +256,7 @@
         const sel = form.archetype_id;
         sel.innerHTML = `<option value="">— scegli —</option>` + S.archetypes.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("");
         sel.value = a.id;
+        sel.dispatchEvent(new Event("change"));
       });
     };
 
@@ -137,6 +282,8 @@
         g1: G[0].r, p1: G[0].p,
         g2: G[1].r, p2: G[1].r ? G[1].p : null,
         g3: G[2].r, p3: G[2].r ? G[2].p : null,
+        sb2: G[1].r && (SB[1].in.length || SB[1].out.length) ? { in: cleanList(SB[1].in), out: cleanList(SB[1].out) } : null,
+        sb3: G[2].r && (SB[2].in.length || SB[2].out.length) ? { in: cleanList(SB[2].in), out: cleanList(SB[2].out) } : null,
       };
       if (!row.player) { A.toast("Scrivi il nome del giocatore"); return; }
       $("#save-match", root).disabled = true;
@@ -165,6 +312,9 @@
     bindMatchForm(root, draft, () => viewAdd(root));
   }
 
+  A.sbEditor = sbEditor;
+  A.sbSummaryHTML = sbSummaryHTML;
+  A.guideSb = guideSb;
   A.matchFormHTML = matchFormHTML;
   A.bindMatchForm = bindMatchForm;
   A.views.add = viewAdd;
