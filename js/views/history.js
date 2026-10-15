@@ -9,6 +9,7 @@
     root.innerHTML = `
       <div class="page-head"><h1>Storico <span class="muted" style="font-weight:500">· ${A.esc(A.currentDeck().name)}</span></h1>
         <div class="inline">
+          <a class="btn sm primary" href="#report">📄 Report leggibile</a>
           <button class="btn sm" id="exp-csv">Esporta CSV</button>
           <button class="btn sm" id="exp-json">Backup JSON</button>
           <label class="btn sm">Importa backup<input type="file" id="imp-json" accept=".json,application/json" hidden></label>

@@ -35,7 +35,7 @@
         <label class="field">Versione lista
           <select name="decklist_id"><option value="">—</option>${A.versions().map((d) => `<option value="${esc(d.id)}"${d.id === deckSel ? " selected" : ""}>${esc(d.name)}${d.is_active ? " (attiva)" : ""}</option>`).join("")}</select>
         </label>
-        <label class="field">Nome avversario <span class="muted" style="font-weight:400">(opzionale)</span><input name="opponent" value="${esc(m.opponent || "")}" placeholder="nick MTGO, nome…"></label>
+        <label class="field">Nome avversario <span class="muted" style="font-weight:400">(opzionale)</span><input name="opponent" list="opp-dl" value="${esc(m.opponent || "")}" placeholder="nick MTGO, nome…"><datalist id="opp-dl">${[...new Set(S.matches.map((x) => (x.opponent || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)).map((o) => `<option value="${esc(o)}">`).join("")}</datalist></label>
         <label class="field full">Note <span class="muted" style="font-weight:400">(opzionale — se scrivi la sidata, es. “side otd: +2 priest −2 stifle”, la leggo da sola)</span><textarea name="notes" rows="2" class="notes-ta" placeholder="mulligan, carte chiave, errori, sidata…">${esc(m.notes || "")}</textarea></label>
         <div class="field full" id="notes-panel"></div>
       </div>
@@ -321,7 +321,7 @@
       if (!name || !name.trim()) return;
       A.guard(async () => {
         const ex = S.archetypes.find((a) => a.name.toLowerCase() === name.trim().toLowerCase());
-        const a = ex || (await DB.insert("archetypes", { name: name.trim(), sideboard_plan: "", notes: "" }));
+        const a = ex || (await DB.insert("archetypes", { name: A.archName(name), sideboard_plan: "", notes: "" }));
         if (!ex) { S.archetypes.push(a); S.archetypes.sort((x, y) => x.name.localeCompare(y.name)); }
         const sel = form.archetype_id;
         sel.innerHTML = `<option value="">— scegli —</option>` + S.archetypes.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("");
@@ -343,7 +343,7 @@
       const row = {
         deck_id: m.deck_id || A.currentDeck().id,
         archetype_id: form.archetype_id.value,
-        player: form.player.value.trim(),
+        player: A.titleName(form.player.value),
         played_at: form.played_at.value,
         event: form.event.value,
         decklist_id: form.decklist_id.value || null,

@@ -26,6 +26,10 @@
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
   const today = () => new Date().toISOString().slice(0, 10);
   const pct = (x, d = 0) => (x == null || isNaN(x) ? "—" : (x * 100).toFixed(d) + "%");
+  // "mario  longo" -> "Mario Longo" (nomi dei nostri giocatori)
+  const titleName = (s) => String(s || "").trim().replace(/\s+/g, " ").toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (m, p, c) => p + c.toUpperCase());
+  // Nomi dei mazzi avversari: sigle di colore in maiuscolo ("wr gatti" -> "WR gatti", "mono u S&T" -> "Mono U S&T"), prima lettera maiuscola
+  const archName = (s) => { const t = String(s || "").trim().replace(/\s+/g, " ").split(" ").map((w) => (/^[wubrg]{1,3}$/.test(w) ? w.toUpperCase() : w)).join(" "); return t.charAt(0).toUpperCase() + t.slice(1); };
   const fmtDate = (d) => { if (!d) return ""; const [y, m, g] = d.split("-"); return `${g}/${m}/${y.slice(2)}`; };
 
   const DEFAULT_ARCHETYPES = [
@@ -445,7 +449,8 @@
     if (!S.ready) return;
     const [name, arg] = (location.hash.replace("#", "") || "dashboard").split("/");
     const v = App.views[name] ? name : "dashboard";
-    $$("#tabs a").forEach((a) => a.classList.toggle("active", a.dataset.view === v));
+    const tab = { players: "opponents", report: "sideboard" }[v] || v;
+    $$("#tabs a").forEach((a) => a.classList.toggle("active", a.dataset.view === tab));
     $("#fab").hidden = v === "add";
     hideTip();
     if (!currentDeck()) { viewNoDeck($("#view")); return; }
@@ -501,7 +506,7 @@
       $("#name-in", root).focus();
       $("#name-form", root).onsubmit = (e) => {
         e.preventDefault();
-        S.me = $("#name-in", root).value.trim(); lsSet("me", S.me);
+        S.me = titleName($("#name-in", root).value); lsSet("me", S.me);
         closeModal(); renderWho(); after && after();
       };
     });
@@ -617,7 +622,7 @@
     $("#login").onsubmit = (e) => {
       e.preventDefault();
       const key = e.target.key.value.trim();
-      S.me = e.target.me.value.trim(); lsSet("me", S.me);
+      S.me = titleName(e.target.me.value); lsSet("me", S.me);
       lsSet("groupKey", key);
       start();
     };
@@ -660,7 +665,7 @@
   // =====================================================================
   Object.assign(App, {
     CFG, REMOTE, LOW_N, EVENTS, DB, S,
-    $, $$, esc, lsGet, lsSet, uid, today, pct, fmtDate,
+    $, $$, esc, lsGet, lsSet, uid, today, pct, fmtDate, titleName, archName,
     cardKey, parseList, countList, listMap, listToText,
     reload, currentDeck, setDeck, aliases, saveAliases, versions, versionById, activeVersion, deckMatches, guideFor, saveGuide,
     archById, players, chrono,

@@ -9,6 +9,7 @@
     const count = (id) => ms.filter((m) => m.archetype_id === id).length;
     root.innerHTML = `
       <div class="page-head"><h1>Avversari</h1><button class="btn primary" id="add-arch">+ Archetipo</button></div>
+      <div class="seg opp-switch"><a href="#opponents" class="on">Mazzi</a><a href="#players">Giocatori</a></div>
       <p class="muted" style="margin-top:-6px">Gli archetipi che incontrate (validi per tutti i vostri mazzi). Le statistiche sono quelle di <b>${esc(A.currentDeck().name)}</b>. Clicca per modificarli.</p>
       <div class="opp-list">${[...S.archetypes].sort((x, y) => count(y.id) - count(x.id) || x.name.localeCompare(y.name)).map((a) => {
         const s = A.stats(ms.filter((m) => m.archetype_id === a.id));
@@ -59,7 +60,7 @@
       };
       f.onsubmit = (e) => {
         e.preventDefault();
-        const name = f.name.value.trim();
+        const name = A.archName(f.name.value);
         if (S.archetypes.some((x) => x.name.toLowerCase() === name.toLowerCase() && x.id !== a?.id)) { A.toast("Esiste già un archetipo con questo nome"); return; }
         const row = { name, notes: f.notes.value.trim() };
         A.guard(async () => {
