@@ -128,7 +128,8 @@
 
   function planBoxHTML(label, st) {
     const n = (st && st.n) || 0, t = st && st.typical;
-    const sup = t && typeof t.support === "number" ? ` · basato su ${t.support} game` : "";
+    const used = t && typeof t.support === "number" ? Math.round(t.support * n) : 0;
+    const sup = n ? ` · sidata tipica usata in ${used} su ${n}` : "";
     const c = chips(t);
     const body = n ? (c ? `<div class="rp-chips">${c}</div>` : `<p class="rp-small">Nessuna sidata ricorrente.</p>`) : `<p class="rp-small">Nessun dato su questo lato.</p>`;
     return `<div class="rp-plan"><h4>${label}</h4>${body}${n ? `<p class="rp-small">Win rate ${pct(st.wr)}${sup}</p>` : ""}</div>`;
@@ -143,9 +144,14 @@
       <div class="rp-matchup-head"><h3>vs ${esc(r.name)}</h3><span class="rp-small">su ${(sides.all && sides.all.n) || 0} game</span></div>
       ${sum.length ? `<ul class="rp-list">${sum.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>` : ""}
       <div class="rp-plans">${planBoxHTML("Sul play", sides.play)}${planBoxHTML("Sul draw", sides.draw)}</div>
+      <div class="rp-cols">
+        <div><h4>Entrano</h4>${cardListHTML(topCards(sides.all && sides.all.cards && sides.all.cards.in, 6), "in", sides)}</div>
+        <div><h4>Escono</h4>${cardListHTML(topCards(sides.all && sides.all.cards && sides.all.cards.out, 6), "out", sides)}</div>
+      </div>
       ${guideHTML(g)}
     </div>`;
   }
+  const coverage = (rep) => `${rep.recorded} ${rep.recorded === 1 ? "sidata registrata" : "sidate registrate"} su ${rep.totalPost} game post-board, in ${(rep.byArch || []).length} matchup.`;
 
   function sidateHTML(m) {
     if (m.sbState === "missing") return "";
@@ -156,21 +162,11 @@
       </section>`;
     }
     const rep = m.sb;
-    const hl = safe(() => A.sbstats.highlights(rep, { max: 6 }), []) || [];
-    const sides = rep.overall && rep.overall.sides;
-    const cardsIn = topCards(sides && sides.all && sides.all.cards && sides.all.cards.in, 12);
-    const cardsOut = topCards(sides && sides.all && sides.all.cards && sides.all.cards.out, 12);
     const byArch = [...(rep.byArch || [])].sort((a, b) => ((b.scope && b.scope.sides && b.scope.sides.all && b.scope.sides.all.n) || 0) - ((a.scope && a.scope.sides && a.scope.sides.all && a.scope.sides.all.n) || 0));
     return `<section class="rp-sec">
       <h2>Sidate</h2>
-      ${hl.length ? `<ul class="rp-list">${hl.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>` : `<p class="rp-muted">Ancora poche sidate per evidenziare tendenze.</p>`}
-      <h3 class="rp-h3">Carte chiave e di routine</h3>
-      <p class="rp-small">Frequenza: quanto spesso la carta compare nelle sidate registrate. Play e draw indicano la frequenza su ciascun lato.</p>
-      <div class="rp-cols">
-        <div><h4>Entrano</h4>${cardListHTML(cardsIn, "in", sides)}</div>
-        <div><h4>Escono</h4>${cardListHTML(cardsOut, "out", sides)}</div>
-      </div>
-      <h3 class="rp-h3">Piani per matchup</h3>
+      <p>${esc(coverage(rep))} Ogni matchup ha la sua sidata, quindi qui sotto c'è un blocco per avversario: le carte <b>chiave</b> (quasi sempre), <b>di routine</b> (spesso) e <b>occasionali</b>, on the play e on the draw.</p>
+      <p class="rp-small">Frequenza = in quante sidate contro quell'avversario la carta è entrata o uscita.</p>
       <div class="rp-matchups">${byArch.map((r) => matchupBlockHTML(rep, r)).join("")}</div>
     </section>`;
   }
@@ -234,21 +230,16 @@
     if (!m.matchups.length) L.push("• Nessun dato");
     m.matchups.forEach((x) => L.push(`• *${x.arch.name}*: ${recStr(x.s)} (${pct(x.s.wr)}) · ${comento(x.s)[1]}`));
     if (m.sbState === "ok") {
-      const rep = m.sb, sides = rep.overall && rep.overall.sides;
-      const hl = safe(() => A.sbstats.highlights(rep, { max: 6 }), []) || [];
-      L.push("", "*🎯 Sidate*");
-      hl.forEach((s) => L.push(`• ${s}`));
-      const line = (c, dir) => `• ${dir === "in" ? "Entra" : "Esce"}: ${c.name} (${TIER_LABEL[c.tier] || "occasionale"}, frequenza ${pct(c.rate)}${c.modeQ ? `, di solito ${copie(c.modeQ)}` : ""})`;
-      const cIn = topCards(sides && sides.all && sides.all.cards && sides.all.cards.in, 8);
-      const cOut = topCards(sides && sides.all && sides.all.cards && sides.all.cards.out, 8);
-      L.push("", "*🃏 Carte chiave e di routine*");
-      cIn.forEach((c) => L.push(line(c, "in")));
-      cOut.forEach((c) => L.push(line(c, "out")));
-      L.push("", "*🧭 Piani per matchup*");
+      const rep = m.sb;
+      const line = (c, dir) => `${dir === "in" ? "+" : "−"} ${c.name} (${TIER_LABEL[c.tier] || "occasionale"}, ${pct(c.rate)}${c.modeQ ? `, di solito ${copie(c.modeQ)}` : ""})`;
+      L.push("", "*🎯 Sidate per matchup*", coverage(rep));
       [...(rep.byArch || [])].forEach((r) => {
         const sc = r.scope || {}, pl = sc.sides && sc.sides.play, dr = sc.sides && sc.sides.draw;
-        L.push(`*vs ${r.name}*`);
+        L.push("", `*vs ${r.name}*`);
         (safe(() => A.sbstats.archSummary(rep, r.archId), []) || []).forEach((s) => L.push(`• ${s}`));
+        const al = sc.sides && sc.sides.all;
+        const key = [...topCards(al && al.cards && al.cards.in, 5).filter((c) => c.tier !== "occasionale").map((c) => line(c, "in")), ...topCards(al && al.cards && al.cards.out, 5).filter((c) => c.tier !== "occasionale").map((c) => line(c, "out"))];
+        if (key.length) L.push(`• Carte chiave/di routine: ${key.join("; ")}`);
         L.push(`• Sul play: ${pl && pl.n ? planTxt(pl.typical) || "nessuna sidata ricorrente" : "nessun dato"}`);
         L.push(`• Sul draw: ${dr && dr.n ? planTxt(dr.typical) || "nessuna sidata ricorrente" : "nessun dato"}`);
         const g = safe(() => A.guideFor(r.archId), null);

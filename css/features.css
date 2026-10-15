@@ -124,3 +124,12 @@ mark.ev-ign { background: transparent; text-decoration: line-through; opacity: .
 .sbs-col details .sbs-list { margin-top: 8px; }
 .sbs-typ { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0; }
 @media print { .sbs-seg { display: none !important; } .sbs-tier.t-chiave { background: #fff; color: #000; border: 1px solid #000; } .sbs-bar i { background: #666; } }
+/* Sidate per matchup (panoramica) */
+.sbm-list { display: flex; flex-direction: column; gap: 10px; }
+.sbm { border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; background: var(--surface); }
+.sbm > summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; list-style: none; }
+.sbm > summary::-webkit-details-marker { display: none; }
+.sbm > summary::before { content: "▸"; color: var(--text-3); }
+.sbm[open] > summary::before { content: "▾"; }
+.sbm > summary a { margin-left: auto; }
+.sbm-body { margin-top: 10px; }

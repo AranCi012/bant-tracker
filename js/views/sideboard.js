@@ -126,9 +126,13 @@
   const sentencesHTML = (xs) => `<ul class="sbs-sentences">${xs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
 
   // Riassunto in testo semplice (WhatsApp)
+  // Le sidate dipendono dal matchup: niente medie globali, solo il conteggio e poi un blocco per avversario.
+  const coverageText = (report) => (report.recorded
+    ? `${report.recorded} ${report.recorded === 1 ? "sidata registrata" : "sidate registrate"} su ${report.totalPost} game post-board, in ${report.byArch.length} ${report.byArch.length === 1 ? "matchup" : "matchup"}.`
+    : `Nessuna sidata registrata su ${report.totalPost} game post-board.`);
+
   function summaryText(report, deck) {
-    const out = [`*Sidate · ${deck.name}*`, `(${A.today()})`, ""];
-    for (const h of A.sbstats.highlights(report, { max: 8 })) out.push(`• ${h}`);
+    const out = [`*Sidate · ${deck.name}*`, `(${A.today()})`, "", coverageText(report)];
     for (const e of report.byArch) {
       out.push("", `*${e.name}*`);
       for (const s of A.sbstats.archSummary(report, e.archId)) out.push(s);
@@ -224,9 +228,13 @@
       ${A.notes ? `<div class="card nt-link no-print"><span>Le sidate si possono leggere dalle note dei match.</span><a class="btn primary" href="#sideboard/note">📝 Sidate dalle note (${reviewCount()} da rivedere)</a></div>` : ""}
       <div class="no-print">${A.filtersHTML()}</div>
       <div class="card" id="sb-summary">
-        <div class="section-head"><h2>Riassunto sidate</h2><span class="muted small">In media, sulle sidate registrate</span></div>
-        ${sentencesHTML(A.sbstats.highlights(report, { max: 8 }))}
-        <h3 class="sbs-h">Carte più sidate</h3><div id="sb-board"></div>
+        <div class="section-head"><h2>Sidate per matchup</h2><span class="muted small">${esc(coverageText(report))}</span></div>
+        ${report.byArch.length ? `<p class="muted small" style="margin-top:0">Ogni matchup ha la sua sidata: per ciascun avversario, le carte <b>chiave</b> (entrano/escono quasi sempre), <b>di routine</b> e <b>occasionali</b>, on the play e on the draw.</p>
+        <div class="sbm-list">${report.byArch.map((e, i) => `<details class="sbm"${i < 3 ? " open" : ""} data-arch-sum="${esc(e.archId)}">
+          <summary><b>vs ${esc(e.name)}</b> <span class="muted small">${e.scope.sides.all.n} ${e.scope.sides.all.n === 1 ? "sidata" : "sidate"} · otp ${e.scope.sides.play.n} · otd ${e.scope.sides.draw.n}</span>
+            <a class="small" href="#sideboard/${encodeURIComponent(e.archId)}">guida e dettagli →</a></summary>
+          <div class="sbm-body"></div></details>`).join("")}</div>`
+        : `<p class="muted">Registra o conferma qualche sidata (anche dalle note) per vedere, matchup per matchup, cosa entra e cosa esce.</p>`}
       </div>
       ${!rows.length ? `<div class="card empty-state"><p>Ancora nessuna guida né game post-board per questo mazzo.<br>Apri un matchup dalla <a href="#matchup">matrice</a> oppure scegli un archetipo qui sotto per scrivere la prima guida.</p>
         <div class="inline" style="justify-content:center;flex-wrap:wrap">${S.archetypes.slice(0, 12).map((a) => `<a class="btn sm" href="#sideboard/${encodeURIComponent(a.id)}">${esc(a.name)}</a>`).join("")}</div></div>` : `
@@ -247,7 +255,11 @@
       </div>`}`;
     A.bindFilters(root, () => viewOverview(root));
     if (A.cards && A.cards.bindHover) A.cards.bindHover(root);
-    mountBoard($("#sb-board", root), report.overall);
+    // Un blocco per avversario: frasi, sidata tipica per lato, carte per fascia
+    for (const box of root.querySelectorAll("[data-arch-sum]")) {
+      const e = report.byArch.find((x) => x.archId === box.dataset.archSum);
+      if (e) archBlock($(".sbm-body", box), report, e);
+    }
     const b = (id, fn) => { const el = $(id, root); if (el) el.onclick = fn; };
     const base = `sideboard-${slug(deck.name)}`;
     b("#sb-sum", () => copyText(summaryText(report, deck), "Riassunto copiato: incollalo dove vuoi"));
@@ -315,6 +327,21 @@
     A.bindFilters(root, () => viewDetail(root, archId));
     renderMedia($("#sd-media", root), ms, archId);
     renderStats($("#sd-stats", root), ms, archId);
+  }
+
+  // Contenuto riusabile per un matchup: frasi, sidata tipica on the play / on the draw, carte per fascia
+  function archBlock(el, report, e) {
+    let h = sentencesHTML(A.sbstats.archSummary(report, e.archId));
+    for (const [sd, label] of SIDES) {
+      const st = e.scope.sides[sd];
+      if (!st.n || !(st.typical.in.length || st.typical.out.length)) continue;
+      const used = Math.round(st.typical.support * st.n);
+      h += `<div class="sbs-typ"><b>${label}</b> ${A.sbSummaryHTML(st.typical)}<span class="muted small">${used ? `usata in ${used} su ${st.n}` : `nessuna sidata identica alla tipica (${st.n} registrate)`}</span></div>`;
+    }
+    h += `<div class="sbs-board"></div>`;
+    el.innerHTML = h;
+    mountBoard($(".sbs-board", el), e.scope);
+    if (A.cards && A.cards.bindHover) A.cards.bindHover(el);
   }
 
   // Card "In media": frasi, sidata tipica per lato, carte per fascia
