@@ -12,7 +12,7 @@ Dashboard per registrare e analizzare le partite dei nostri mazzi di Magic (Lega
 - **Statistiche delle sidate**: per ogni matchup e separatamente on the play / on the draw, le carte **chiave** (entrano/escono quasi sempre), **di routine** e **occasionali**, la sidata tipica e un riassunto in frasi ("in media entrano 3,8 carte…").
 - **Report leggibile** (Sideboard o Storico → 📄 Report leggibile): documento impaginato da salvare in PDF, scaricabile come file HTML che si apre ovunque, o da copiare su WhatsApp. CSV e Markdown restano in "Altri formati".
 - **Liste**: versioni della lista con win rate, differenze carta per carta fra una versione e l'altra, confronto fra due versioni (anche per singolo matchup), "impatto delle carte" (win rate con e senza ogni carta cambiata), vista a immagini da Scryfall.
-- **Avversari**: archetipi modificabili con note.
+- **Avversari**: archetipi modificabili con note (con "Unisci in…" per i doppioni) e, nella sezione **Giocatori**, le statistiche contro ogni giocatore avversario (dal campo "Nome avversario" dei match).
 - **Storico**: modifica ed eliminazione dei match, export CSV, backup e import JSON.
 - **Telefono**: si installa come app (Aggiungi a Home) e il bottone "invita" genera un link o QR code che fa entrare gli amici senza digitare il codice.
 - **Filtri** per giocatore, versione lista, evento e date.
@@ -101,6 +101,7 @@ js/sbstats.js             statistiche delle sidate (carte chiave/routine, sidata
 js/views/report.js        report leggibile (PDF, HTML, WhatsApp)
 js/notes.js               interprete delle note (trova le sidate scritte a mano)
 js/matchform.js           form per registrare un match (con sidate)
+js/views/players.js       statistiche contro i giocatori avversari
 js/views/*.js             una vista per scheda (dashboard, matchup, sideboard, storico, liste, avversari)
 js/mobile.js              link di invito, QR code, icone della barra in basso
 js/boot.js                avvio

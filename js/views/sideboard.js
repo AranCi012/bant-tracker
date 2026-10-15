@@ -87,43 +87,34 @@
   //  Statistiche medie (A.sbstats): componente "carte più sidate"
   // ---------------------------------------------------------------------
   const TIER_LABEL = { chiave: "Chiave", routine: "Routine", occasionale: "Occasionale" };
-  const SIDE_TABS = [["all", "Tutte"], ["play", "On the play"], ["draw", "On the draw"]];
-  const boardSide = { v: "all" }; // lato scelto, condiviso tra le viste
-
-  function cardItemHTML(c, dir, scope, n) {
-    const r = (sd) => { const st = scope.sides[sd]; if (!st.n) return "—"; const f = st.cards[dir].find((x) => x.key === c.key); return `${f ? Math.round(f.rate * 100) : 0}%`; };
-    const p = Math.round(c.rate * 100);
-    return `<li class="sbs-card"><div class="sbs-top"><span class="sbs-name" data-card="${esc(c.name)}">${esc(c.name)}</span><span class="sbs-tier t-${esc(c.tier)}">${TIER_LABEL[c.tier]}</span></div>
-      <div class="sbs-bar" role="img" aria-label="${p}%"><i style="width:${p}%"></i></div>
-      <div class="sbs-meta"><b>${p}%</b> <span class="muted">(${c.games} su ${n})</span> · otp ${r("play")} · otd ${r("draw")} · di solito ${c.modeQ} ${c.modeQ === 1 ? "copia" : "copie"}</div></li>`;
-  }
-  function cardColHTML(title, dir, scope, st) {
-    const cs = st.cards[dir], LIM = 8;
-    const list = (xs) => `<ul class="sbs-list">${xs.map((c) => cardItemHTML(c, dir, scope, st.n)).join("")}</ul>`;
-    return `<div class="sbs-col ${dir}"><h3>${title}</h3>${cs.length ? list(cs.slice(0, LIM)) : `<p class="muted small">Nessuna carta.</p>`}
-      ${cs.length > LIM ? `<details><summary class="muted small">Altre ${cs.length - LIM} carte</summary>${list(cs.slice(LIM))}</details>` : ""}</div>`;
-  }
-  function boardInnerHTML(scope) {
-    const st = scope.sides[boardSide.v];
-    const lab = boardSide.v === "play" ? " on the play" : boardSide.v === "draw" ? " on the draw" : "";
-    if (!st.n) return `<p class="muted">Nessuna sidata registrata${lab || " con questi filtri"}.${boardSide.v === "all" ? " Registra o conferma qualche sidata (anche dalle note) per vedere le statistiche." : " Prova con “Tutte”."}</p>`;
-    return `<p class="muted small sbs-note">${st.n} ${st.n === 1 ? "sidata" : "sidate"} registrat${st.n === 1 ? "a" : "e"}${lab}${st.n < 3 ? " · ancora pochi dati: le percentuali vanno prese con cautela" : ""}.
-      Chiave = quasi sempre (almeno ${Math.round(A.sbstats.TIERS.chiave * 100)}%) · Routine = spesso (almeno ${Math.round(A.sbstats.TIERS.routine * 100)}%) · Occasionale = più raramente.</p>
-      <div class="sbs-cols">${cardColHTML("Entrano", "in", scope, st)}${cardColHTML("Escono", "out", scope, st)}</div>`;
-  }
-  // Monta toggle Tutte/play/draw + liste in host
-  function mountBoard(host, scope) {
-    host.innerHTML = `<div class="seg sbs-seg" role="group" aria-label="Lato">${SIDE_TABS.map(([v, l]) => `<button type="button" data-side="${v}" class="${boardSide.v === v ? "on" : ""}" data-p="1">${l}</button>`).join("")}</div><div class="sbs-body"></div>`;
-    const body = $(".sbs-body", host);
-    const draw = () => {
-      body.innerHTML = boardInnerHTML(scope);
-      $$(".sbs-seg button", host).forEach((b) => b.classList.toggle("on", b.dataset.side === boardSide.v));
-      if (A.cards && A.cards.bindHover) A.cards.bindHover(body);
-    };
-    $$(".sbs-seg button", host).forEach((b) => { b.onclick = () => { boardSide.v = b.dataset.side; draw(); }; });
-    draw();
-  }
+  const TIER_HINT = { chiave: "quasi sempre", routine: "spesso", occasionale: "più raramente" };
   const sentencesHTML = (xs) => `<ul class="sbs-sentences">${xs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+  // Chip compatti "+2 Carta" / "−1 Carta" (max 3 per direzione + chip "+N" di overflow).
+  // st = statistiche del lato (per marcare le carte "chiave"); st può essere null per i piani da guida.
+  function chipsHTML(plan, st, max = 3) {
+    const one = (c, dir) => {
+      const cs = st && st.cards[dir].find((x) => x.key === A.cardKey(c.name));
+      const key = cs && cs.tier === "chiave";
+      const tip = key ? ` data-tip="${esc(`Chiave: ${dir === "in" ? "entra" : "esce"} in ${cs.games} su ${st.n}`)}"` : "";
+      return `<span class="sbo-chip ${dir === "in" ? "in" : "out"}${key ? " key" : ""}" data-card="${esc(c.name)}"${tip}>${dir === "in" ? "+" : MINUS}${c.q} ${esc(c.name)}</span>`;
+    };
+    const part = (list, dir) => {
+      const shown = list.slice(0, max), rest = list.slice(max);
+      return shown.map((c) => one(c, dir)).join("") + (rest.length ? `<span class="sbo-chip more ${dir === "in" ? "in" : "out"}" data-tip="${esc(rest.map((c) => `${dir === "in" ? "+" : MINUS}${c.q} ${c.name}`).join(", "))}">+${rest.length}</span>` : "");
+    };
+    return part(plan.in, "in") + part(plan.out, "out");
+  }
+  // Piano di un lato: tipico dalle sidate registrate, altrimenti guida (tag "guida"), altrimenti "—"
+  function sidePlanHTML(e, guide, sd) {
+    const st = e && e.scope.sides[sd];
+    if (st && st.n && (st.typical.in.length || st.typical.out.length)) return `<span class="sbo-chips">${chipsHTML(st.typical, st)}</span>`;
+    const gl = guideLists(guide, sd);
+    if (gl.in.length || gl.out.length) return `<span class="sbo-chips">${chipsHTML(gl, null)}<span class="sbo-tag">guida</span></span>`;
+    if (st && st.n) return `<span class="muted small">${plural(st.n, "sidata", "sidate")}, nessuna carta ricorrente</span>`;
+    return `<span class="muted">—</span>`;
+  }
 
   // Riassunto in testo semplice (WhatsApp)
   // Le sidate dipendono dal matchup: niente medie globali, solo il conteggio e poi un blocco per avversario.
@@ -143,13 +134,14 @@
   // ---------------------------------------------------------------------
   //  Dati della panoramica
   // ---------------------------------------------------------------------
-  function overviewRows(ms) {
+  function overviewRows(ms, includeAll) {
     const deck = A.currentDeck();
     const byA = new Map();
     for (const m of ms) { if (!byA.has(m.archetype_id)) byA.set(m.archetype_id, []); byA.get(m.archetype_id).push(m); }
     const ids = new Set();
     for (const [id, list] of byA) if (postGames(list).length) ids.add(id);
     for (const g of S.guides) if (g.deck_id === deck.id && hasGuide(g)) ids.add(g.archetype_id);
+    if (includeAll) for (const a of S.archetypes) ids.add(a.id);
     return [...ids].map((id) => {
       const arch = A.archById(id); if (!arch) return null;
       const pg = postGames(byA.get(id) || []);
@@ -158,7 +150,7 @@
         const gs = pg.filter((g) => g.side === sd), rec = gs.filter((g) => g.sb);
         sides[sd] = { gs, rec, s: wrStat(gs), top: topPlan(rec)[0] || null };
       }
-      return { id, arch, guide: A.guideFor(id), pg, sides, recorded: pg.filter((g) => g.sb).length };
+      return { id, arch, guide: A.guideFor(id), pg, sides, all: wrStat(pg), recorded: pg.filter((g) => g.sb).length };
     }).filter(Boolean).sort((a, b) => b.pg.length - a.pg.length || a.arch.name.localeCompare(b.arch.name));
   }
 
@@ -203,14 +195,32 @@
   // ---------------------------------------------------------------------
   //  Vista: panoramica
   // ---------------------------------------------------------------------
+  const sbo = { q: "", sort: "sidate", only: true }; // stato della panoramica: sopravvive ai re-render
+  const SORTS = [["sidate", "Più sidate"], ["giocati", "Più giocati"], ["az", "A–Z"], ["peggiore", "Post-board peggiore"]];
+
+  function rowHTML(r, e) {
+    const nSb = e ? e.scope.sides.all.n : 0, w = r.all;
+    const sub = `${plural(nSb, "sidata", "sidate")} · ${r.pg.length} game post-board`;
+    let wr = `<span class="muted">—</span>`;
+    if (w.n) {
+      const c = A.wrColor(w.wr);
+      wr = `<span class="sbo-pill${w.n < A.LOW_N ? " low" : ""}" style="background:${c.bg};color:${c.fg}" data-tip="${esc(`Post-board: ${w.k} vinte su ${w.n} game`)}">${pct(w.wr)}<small>${w.k}/${w.n}</small></span>`;
+    }
+    return `<a class="sbo-row" href="#sideboard/${encodeURIComponent(r.id)}" aria-label="${esc(`Apri sideboard contro ${r.arch.name}`)}">
+      <span class="sbo-name"><b>${esc(r.arch.name)}</b><span class="muted small">${sub}</span></span>
+      <span class="sbo-cell"><span class="sbo-lbl">OTP</span>${sidePlanHTML(e, r.guide, "play")}</span>
+      <span class="sbo-cell"><span class="sbo-lbl">OTD</span>${sidePlanHTML(e, r.guide, "draw")}</span>
+      <span class="sbo-wr">${wr}</span><span class="sbo-go" aria-hidden="true">›</span></a>`;
+  }
+
   function viewOverview(root) {
-    const deck = A.currentDeck();
-    const rows = overviewRows(A.filtered());
-    const report = A.sbstats.analyze(A.filtered());
-    const guideCell = (r, sd) => {
-      const l = guideLists(r.guide, sd);
-      return l.in.length || l.out.length ? A.sbSummaryHTML(l) : `<span class="muted small">—</span>`;
-    };
+    const deck = A.currentDeck(), ms = A.filtered();
+    const report = A.sbstats.analyze(ms);
+    const rows = overviewRows(ms, false);
+    const eBy = new Map(report.byArch.map((e) => [e.archId, e]));
+    // "Solo con sidata o guida": solo avversari con almeno una sidata registrata o una guida scritta
+    const pool = sbo.only ? rows.filter((r) => eBy.has(r.id) || hasGuide(r.guide)) : overviewRows(ms, true);
+    const nRev = A.notes ? reviewCount() : 0;
     root.innerHTML = `
       <div class="page-head"><h1>Sideboard <span class="muted" style="font-weight:500">· ${esc(deck.name)}</span></h1>
         <div class="inline no-print sb-actions">
@@ -225,41 +235,45 @@
           <button class="btn sm" id="sb-csv">Esporta statistiche (.csv)</button>
           <button class="btn sm" id="sb-csv2">Esporta carte (.csv)</button>
         </div></details>
-      ${A.notes ? `<div class="card nt-link no-print"><span>Le sidate si possono leggere dalle note dei match.</span><a class="btn primary" href="#sideboard/note">📝 Sidate dalle note (${reviewCount()} da rivedere)</a></div>` : ""}
+      ${A.notes ? `<a class="sbo-notes no-print" href="#sideboard/note"><span>📝 Sidate dalle note <b>(${nRev} da rivedere)</b></span><span aria-hidden="true">→</span></a>` : ""}
       <div class="no-print">${A.filtersHTML()}</div>
       <div class="card" id="sb-summary">
-        <div class="section-head"><h2>Sidate per matchup</h2><span class="muted small">${esc(coverageText(report))}</span></div>
-        ${report.byArch.length ? `<p class="muted small" style="margin-top:0">Ogni matchup ha la sua sidata: per ciascun avversario, le carte <b>chiave</b> (entrano/escono quasi sempre), <b>di routine</b> e <b>occasionali</b>, on the play e on the draw.</p>
-        <div class="sbm-list">${report.byArch.map((e, i) => `<details class="sbm"${i < 3 ? " open" : ""} data-arch-sum="${esc(e.archId)}">
-          <summary><b>vs ${esc(e.name)}</b> <span class="muted small">${e.scope.sides.all.n} ${e.scope.sides.all.n === 1 ? "sidata" : "sidate"} · otp ${e.scope.sides.play.n} · otd ${e.scope.sides.draw.n}</span>
-            <a class="small" href="#sideboard/${encodeURIComponent(e.archId)}">guida e dettagli →</a></summary>
-          <div class="sbm-body"></div></details>`).join("")}</div>`
-        : `<p class="muted">Registra o conferma qualche sidata (anche dalle note) per vedere, matchup per matchup, cosa entra e cosa esce.</p>`}
-      </div>
-      ${!rows.length ? `<div class="card empty-state"><p>Ancora nessuna guida né game post-board per questo mazzo.<br>Apri un matchup dalla <a href="#matchup">matrice</a> oppure scegli un archetipo qui sotto per scrivere la prima guida.</p>
-        <div class="inline" style="justify-content:center;flex-wrap:wrap">${S.archetypes.slice(0, 12).map((a) => `<a class="btn sm" href="#sideboard/${encodeURIComponent(a.id)}">${esc(a.name)}</a>`).join("")}</div></div>` : `
-      <div class="card">
-        <div class="section-head"><h2>Guide e risultati post-board</h2><span class="muted small">Clicca un archetipo per modificare la guida e vedere le statistiche</span></div>
-        <div class="table-wrap"><table class="heat sb-table">
-          <thead><tr><th>Archetipo</th><th>Guida on the play</th><th>Guida on the draw</th><th style="text-align:center">Post-board play</th><th style="text-align:center">Post-board draw</th><th style="text-align:center">Sidate registrate</th></tr></thead>
-          <tbody>${rows.map((r) => `<tr>
-            <th class="rowh"><a href="#sideboard/${encodeURIComponent(r.id)}">${esc(r.arch.name)}</a></th>
-            <td class="sb-cell">${guideCell(r, "play")}</td>
-            <td class="sb-cell">${guideCell(r, "draw")}</td>
-            ${wrCell(r.sides.play.s, `${r.arch.name} · post-board on the play`)}
-            ${wrCell(r.sides.draw.s, `${r.arch.name} · post-board on the draw`)}
-            <td class="num" style="text-align:center">${r.pg.length ? `${r.recorded}<span class="muted small">/${r.pg.length}</span>` : `<span class="muted">—</span>`}</td>
-          </tr>`).join("")}</tbody></table></div>
-        <div class="legend"><span>Percentuali = win rate delle <b>game</b> post-board (G2-G3).</span><span class="lowsw"></span><span>tratteggiato = meno di ${A.LOW_N} game</span></div>
-        <p class="muted small no-print" style="margin-bottom:0">Per aggiungere una guida a un archetipo che non compare qui, aprilo da <a href="#matchup">Matchup</a> oppure usa l'elenco: ${S.archetypes.filter((a) => !rows.some((r) => r.id === a.id)).slice(0, 40).map((a) => `<a href="#sideboard/${encodeURIComponent(a.id)}">${esc(a.name)}</a>`).join(" · ") || "tutti gli archetipi hanno già una riga"}.</p>
-      </div>`}`;
+        <div class="section-head"><h2>Matchup</h2><span class="muted small" id="sbo-count"></span></div>
+        <p class="muted small" style="margin:0 0 10px">${esc(coverageText(report))} Clicca un avversario per piano completo, carte e guida.</p>
+        <div class="sbo-bar no-print">
+          <input type="search" id="sbo-q" placeholder="Cerca avversario…" aria-label="Cerca avversario" autocomplete="off" value="${esc(sbo.q)}">
+          <select id="sbo-sort" aria-label="Ordina">${SORTS.map(([v, l]) => `<option value="${v}"${sbo.sort === v ? " selected" : ""}>${l}</option>`).join("")}</select>
+          <button type="button" class="sbo-toggle${sbo.only ? " on" : ""}" id="sbo-only" aria-pressed="${sbo.only}">Solo con sidata o guida</button>
+        </div>
+        <div class="sbo-head" aria-hidden="true"><span>Avversario</span><span>On the play</span><span>On the draw</span><span>Post-board</span><span></span></div>
+        <div class="sbo-list" id="sbo-list"></div>
+      </div>`;
+    const list = $("#sbo-list", root);
+    const drawList = () => {
+      const q = sbo.q.trim().toLowerCase();
+      let xs = pool.filter((r) => !q || r.arch.name.toLowerCase().includes(q));
+      const nS = (r) => (eBy.get(r.id) ? eBy.get(r.id).scope.sides.all.n : 0);
+      const by = {
+        sidate: (a, b) => nS(b) - nS(a) || b.pg.length - a.pg.length,
+        giocati: (a, b) => b.pg.length - a.pg.length || nS(b) - nS(a),
+        az: () => 0,
+        peggiore: (a, b) => (a.all.n ? a.all.wr : 9) - (b.all.n ? b.all.wr : 9) || b.all.n - a.all.n,
+      };
+      xs = xs.slice().sort((a, b) => by[sbo.sort](a, b) || a.arch.name.localeCompare(b.arch.name));
+      $("#sbo-count", root).textContent = plural(xs.length, "matchup", "matchup");
+      if (!xs.length) {
+        list.innerHTML = q
+          ? `<p class="muted sbo-empty">Nessun matchup corrisponde a “${esc(sbo.q.trim())}”.</p>`
+          : `<div class="sbo-empty"><p>Ancora nessuna guida né game post-board per questo mazzo.</p>
+              <p class="muted small">Registra una partita con la sidata, scrivi una guida aprendo un avversario (togli il filtro “Solo con sidata o guida”) oppure leggi le sidate dalle tue note: <a href="#sideboard/note">Sidate dalle note</a>.</p></div>`;
+      } else list.innerHTML = xs.map((r) => rowHTML(r, eBy.get(r.id))).join("");
+      if (A.cards && A.cards.bindHover) A.cards.bindHover(list);
+    };
+    drawList();
+    $("#sbo-q", root).oninput = (ev) => { sbo.q = ev.target.value; drawList(); };
+    $("#sbo-sort", root).onchange = (ev) => { sbo.sort = ev.target.value; drawList(); };
+    $("#sbo-only", root).onclick = () => { sbo.only = !sbo.only; viewOverview(root); };
     A.bindFilters(root, () => viewOverview(root));
-    if (A.cards && A.cards.bindHover) A.cards.bindHover(root);
-    // Un blocco per avversario: frasi, sidata tipica per lato, carte per fascia
-    for (const box of root.querySelectorAll("[data-arch-sum]")) {
-      const e = report.byArch.find((x) => x.archId === box.dataset.archSum);
-      if (e) archBlock($(".sbm-body", box), report, e);
-    }
     const b = (id, fn) => { const el = $(id, root); if (el) el.onclick = fn; };
     const base = `sideboard-${slug(deck.name)}`;
     b("#sb-sum", () => copyText(summaryText(report, deck), "Riassunto copiato: incollalo dove vuoi"));
@@ -329,39 +343,37 @@
     renderStats($("#sd-stats", root), ms, archId);
   }
 
-  // Contenuto riusabile per un matchup: frasi, sidata tipica on the play / on the draw, carte per fascia
-  function archBlock(el, report, e) {
-    let h = sentencesHTML(A.sbstats.archSummary(report, e.archId));
-    for (const [sd, label] of SIDES) {
-      const st = e.scope.sides[sd];
-      if (!st.n || !(st.typical.in.length || st.typical.out.length)) continue;
-      const used = Math.round(st.typical.support * st.n);
-      h += `<div class="sbs-typ"><b>${label}</b> ${A.sbSummaryHTML(st.typical)}<span class="muted small">${used ? `usata in ${used} su ${st.n}` : `nessuna sidata identica alla tipica (${st.n} registrate)`}</span></div>`;
-    }
-    h += `<div class="sbs-board"></div>`;
-    el.innerHTML = h;
-    mountBoard($(".sbs-board", el), e.scope);
-    if (A.cards && A.cards.bindHover) A.cards.bindHover(el);
+  // Card "In media": due pannelli (play / draw) con numeri, piano tipico e carte per fascia
+  function tierGroupHTML(st, tier, n) {
+    const lines = [...st.cards.in.map((c) => ({ ...c, dir: "in" })), ...st.cards.out.map((c) => ({ ...c, dir: "out" }))].filter((c) => c.tier === tier);
+    if (!lines.length) return "";
+    const li = (c) => `<li><span class="sbo-sign ${c.dir}">${c.dir === "in" ? "+" : MINUS}</span><span class="sbd-cname" data-card="${esc(c.name)}">${esc(c.name)}</span><span class="muted small"> · ${c.games} su ${n} · di solito ${c.modeQ} ${c.modeQ === 1 ? "copia" : "copie"}</span></li>`;
+    const head = `${TIER_LABEL[tier]} <span class="muted small">(${TIER_HINT[tier]} · ${lines.length})</span>`;
+    return tier === "occasionale"
+      ? `<details class="sbd-tier t-${tier}"><summary>${head}</summary><ul>${lines.map(li).join("")}</ul></details>`
+      : `<div class="sbd-tier t-${tier}"><h4>${head}</h4><ul>${lines.map(li).join("")}</ul></div>`;
   }
-
-  // Card "In media": frasi, sidata tipica per lato, carte per fascia
   function renderMedia(el, ms, archId) {
-    const report = A.sbstats.analyze(ms), e = report.byArch.find((x) => x.archId === archId);
+    const report = A.sbstats.analyze(ms), e = report.byArch.find((x) => x.archId === archId), pg = postGames(ms);
     let h = `<div class="section-head"><h2>In media</h2><span class="muted small">Sidate registrate contro questo archetipo · filtri applicati</span></div>`;
     if (!e) {
       h += `<p class="muted">${report.totalPost ? "Nessuna sidata registrata con questi filtri. Registra o conferma qualche sidata (anche dalle note) per vedere le statistiche." : "Nessuna game post-board (G2/G3) con questi filtri."}</p>`;
       el.innerHTML = h; return;
     }
-    h += sentencesHTML(A.sbstats.archSummary(report, archId));
-    for (const [sd, label] of SIDES) {
-      const st = e.scope.sides[sd];
-      if (!st.n || !(st.typical.in.length || st.typical.out.length)) continue;
-      const used = Math.round(st.typical.support * st.n);
-      h += `<div class="sbs-typ"><b>${label}</b> ${A.sbSummaryHTML(st.typical)}<span class="muted small">${used ? `usata in ${used} su ${st.n}` : `nessuna sidata identica alla tipica (${st.n} registrate)`}</span></div>`;
-    }
-    h += `<h3 class="sbs-h">Carte per fascia</h3><div class="sbs-board"></div>`;
+    const panel = ([sd, label]) => {
+      const st = e.scope.sides[sd], gs = pg.filter((g) => g.side === sd), w = gs.filter((g) => g.r === "W").length;
+      let p = `<section class="sbd-panel"><h3>${label}</h3><p class="sbd-facts"><span><b>${st.n}</b> ${st.n === 1 ? "sidata" : "sidate"}</span><span>${gs.length ? `post-board: <b>${w}</b> vinte su <b>${gs.length}</b>` : "nessun game post-board"}</span></p>`;
+      if (!st.n) return p + `<p class="muted small">Nessuna sidata registrata ${label.toLowerCase()}.</p></section>`;
+      if (st.typical.in.length || st.typical.out.length) {
+        const used = Math.round(st.typical.support * st.n);
+        p += `<div class="sbd-typ"><div class="muted small">Sidata tipica</div><span class="sbo-chips">${chipsHTML(st.typical, st, 99)}</span><div class="muted small">${used ? `usata in ${used} su ${st.n}` : `nessuna sidata identica alla tipica (${st.n} registrate)`}</div></div>`;
+      }
+      p += ["chiave", "routine", "occasionale"].map((t) => tierGroupHTML(st, t, st.n)).join("");
+      return p + `</section>`;
+    };
+    h += `<div class="sbd-panels">${SIDES.map(panel).join("")}</div>
+      <details class="sbd-sum"><summary class="muted small">Riassunto a parole</summary>${sentencesHTML(A.sbstats.archSummary(report, archId))}</details>`;
     el.innerHTML = h;
-    mountBoard($(".sbs-board", el), e.scope);
     if (A.cards && A.cards.bindHover) A.cards.bindHover(el);
   }
 
