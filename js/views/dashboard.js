@@ -11,16 +11,16 @@
     const groups = A.byArchetype(ms);
     const deck = A.currentDeck();
     root.innerHTML = `
-      <div class="page-head"><h1>Dashboard <span class="muted" style="font-weight:500">· ${esc(deck.name)}</span></h1><span class="muted small">${ms.length} match${ms.length !== all.length ? ` (su ${all.length})` : ""}</span></div>
+      ${heroHTML(deck, s, ms, all)}
       ${A.filtersHTML()}
       ${!ms.length ? A.emptyState(all.length ? "Nessun match con questi filtri." : `Ancora nessuna partita registrata con ${esc(deck.name)}.`) : `
       <div class="kpis">
-        ${A.kpi("Match win rate", pct(s.wr), `${A.record(s)}${s.ci ? ` · IC95 ${pct(s.ci[0])}–${pct(s.ci[1])}` : ""}`)}
-        ${A.kpi("Game win rate", pct(s.gwr), `${s.gW}-${s.gL}${s.gD ? "-" + s.gD : ""} in ${s.gN} game`)}
-        ${A.kpi("Pre-board (G1)", pct(s.pre), `${s.preW}/${s.preN} game`)}
-        ${A.kpi("Post-board (G2/G3)", pct(s.post), `${s.postW}/${s.postN} game`)}
-        ${A.kpi("On the play", pct(s.play), `${s.playW}/${s.playN} game`)}
-        ${A.kpi("On the draw", pct(s.draw), `${s.drawW}/${s.drawN} game`)}
+        ${A.kpi("Match win rate", pct(s.wr), `${A.record(s)}${s.ci ? ` · IC95 ${pct(s.ci[0])}–${pct(s.ci[1])}` : ""}`, s.wr)}
+        ${A.kpi("Game win rate", pct(s.gwr), `${s.gW}-${s.gL}${s.gD ? "-" + s.gD : ""} in ${s.gN} game`, s.gwr)}
+        ${A.kpi("Pre-board (G1)", pct(s.pre), `${s.preW}/${s.preN} game`, s.pre)}
+        ${A.kpi("Post-board (G2/G3)", pct(s.post), `${s.postW}/${s.postN} game`, s.post)}
+        ${A.kpi("On the play", pct(s.play), `${s.playW}/${s.playN} game`, s.play)}
+        ${A.kpi("On the draw", pct(s.draw), `${s.drawW}/${s.drawN} game`, s.draw)}
       </div>
       <div class="card">
         <div class="section-head"><h2>Andamento win rate</h2>
@@ -57,6 +57,48 @@
     A.bindDemo(root);
     A.bindMatchRows(root);
     if (ms.length) trendChart($("#trend", root), A.chrono(ms));
+    paintHero(root, deck);
+  }
+
+  // ---- Hero: nome del mazzo + win rate, sull'illustrazione della carta di copertina
+  function heroHTML(deck, s, ms, all) {
+    const last = A.chrono(ms).pop();
+    const nPlayers = new Set(ms.map((m) => m.player)).size;
+    const chips = [
+      `${ms.length} match${ms.length !== all.length ? ` (filtrati su ${all.length})` : ""}`,
+      nPlayers ? `${nPlayers} ${nPlayers === 1 ? "giocatore" : "giocatori"}` : "",
+      A.versions().length ? `${A.versions().length} ${A.versions().length === 1 ? "lista" : "liste"}` : "",
+      last ? `ultima: ${fmtDate(last.played_at)}` : "",
+    ].filter(Boolean);
+    return `<section class="hero">
+      <div class="hero-art" id="hero-art"></div>
+      <a class="hero-credit" id="hero-credit" target="_blank" rel="noopener" hidden></a>
+      <div class="hero-body">
+        <div class="hero-kicker">Il nostro mazzo</div>
+        <h1 class="hero-title">${esc(deck.name)}</h1>
+        <div class="hero-meta">${chips.map((c) => `<span class="hero-chip">${esc(c)}</span>`).join("")}</div>
+      </div>
+      ${s.n ? `<div class="hero-stat">
+        <div class="hero-wr num">${pct(s.wr)}</div>
+        ${A.meter(s.wr)}
+        <div class="hero-sub">match win rate · ${A.record(s)}</div>
+      </div>` : ""}
+    </section>`;
+  }
+  async function paintHero(root, deck) {
+    const art = $("#hero-art", root);
+    if (!art) return;
+    const name = await A.coverCard(deck);
+    if (!name || !art.isConnected) return;
+    const img = new Image();
+    img.onload = () => {
+      if (!art.isConnected) return;
+      art.style.backgroundImage = `url("${img.src}")`;
+      art.classList.add("on");
+      const cr = $("#hero-credit", root);
+      if (cr) { cr.textContent = name; cr.href = A.cards ? A.cards.pageUrl(name) : "#"; cr.title = "Illustrazione da Scryfall"; cr.hidden = false; }
+    };
+    img.src = A.artUrl(name);
   }
 
   function wrBars(groups) {

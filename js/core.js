@@ -196,6 +196,27 @@
     return saved;
   }
 
+  // Carta di copertina: scelta nel mazzo, altrimenti la creatura con più copie della lista attiva
+  const coverCache = new Map();
+  async function coverCard(deck) {
+    if (!deck) return "";
+    if (deck.cover_card) return deck.cover_card;
+    const v = versions().find((x) => x.is_active) || versions()[0];
+    if (!v) return "";
+    const key = deck.id + "|" + v.id + "|" + v.maindeck.length;
+    if (coverCache.has(key)) return coverCache.get(key);
+    const main = parseList(v.maindeck).sort((a, b) => b.q - a.q);
+    let pick = main[0] ? main[0].name : "";
+    if (App.cards && main.length) {
+      const meta = await App.cards.lookup(main.map((c) => c.name));
+      const cr = main.find((c) => { const m = meta.get(cardKey(c.name)); return m && m.type === "Creatura"; });
+      if (cr) pick = cr.name;
+    }
+    coverCache.set(key, pick);
+    return pick;
+  }
+  const artUrl = (name) => `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}&format=image&version=art_crop`;
+
   const archById = (id) => S.archetypes.find((a) => a.id === id);
   const players = () => [...new Set(S.matches.map((m) => m.player).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const chrono = (ms) => [...ms].sort((a, b) => (a.played_at || "").localeCompare(b.played_at || "") || (a.created_at || "").localeCompare(b.created_at || ""));
@@ -320,7 +341,9 @@
     a.href = URL.createObjectURL(new Blob([text], { type }));
     a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
-  const kpi = (label, value, sub) => `<div class="card kpi"><div class="label">${label}</div><div class="value num">${value}</div><div class="sub">${esc(sub)}</div></div>`;
+  // Barra 0–100% colorata come le heatmap, con tacca al 50%
+  const meter = (ratio) => (ratio == null || isNaN(ratio) ? "" : `<div class="meter" aria-hidden="true"><span style="width:${(Math.max(0, Math.min(1, ratio)) * 100).toFixed(1)}%;background:${ratio >= 0.5 ? "var(--win)" : "var(--loss)"}"></span><i></i></div>`);
+  const kpi = (label, value, sub, ratio) => `<div class="card kpi"><div class="label">${label}</div><div class="value num">${value}</div>${meter(ratio)}<div class="sub">${esc(sub)}</div></div>`;
 
   // ---- Heatmap & matrice G1 (usate da più viste) ----------------------
   function heatCell(v, k, n, title, rec, matchN) {
@@ -494,6 +517,8 @@
       <h2>${d ? "Modifica mazzo" : "Nuovo mazzo"}</h2>
       <form id="deck-ent" class="form-grid">
         <label class="field full">Nome <input name="name" value="${esc(d ? d.name : "")}" required placeholder="es. Bant, Dimir Tempo, Lands…"></label>
+        <label class="field full">Carta di copertina <span class="muted" style="font-weight:400">(opzionale: la sua illustrazione appare in cima alla dashboard)</span>
+          <input name="cover_card" value="${esc(d ? d.cover_card || "" : "")}" placeholder="es. Phelia, Exuberant Shepherd — vuoto = scelta automatica"></label>
         <label class="field full">Note <textarea name="notes" rows="3">${esc(d ? d.notes : "")}</textarea></label>
         <div class="row-actions full" style="justify-content:space-between">
           <span>${d ? `<button type="button" class="btn danger" id="del-deck-ent"${used ? ` disabled title="Ha ${used} match"` : ""}>Elimina</button>` : ""}</span>
@@ -513,8 +538,9 @@
         const name = f.name.value.trim();
         if (S.decks.some((x) => x.name.toLowerCase() === name.toLowerCase() && (!d || x.id !== d.id))) { toast("Esiste già un mazzo con questo nome"); return; }
         guard(async () => {
-          if (d) await DB.update("decks", d.id, { name, notes: f.notes.value.trim() });
-          else { const n = await DB.insert("decks", { name, notes: f.notes.value.trim() }); S.deckId = n.id; lsSet("deckId", n.id); S.filters.version = ""; }
+          const row = { name, notes: f.notes.value.trim(), cover_card: f.cover_card.value.trim() };
+          if (d) await DB.update("decks", d.id, row);
+          else { const n = await DB.insert("decks", row); S.deckId = n.id; lsSet("deckId", n.id); S.filters.version = ""; }
           await reload(); closeModal(); renderDeckSwitch(); route(); toast(d ? "Mazzo aggiornato" : `Ora stai guardando “${name}”`);
         });
       };
@@ -628,7 +654,7 @@
     reload, currentDeck, setDeck, versions, versionById, activeVersion, deckMatches, guideFor, saveGuide,
     archById, players, chrono,
     gamesOf, matchResult, wilson, stats, record, filtered, byArchetype,
-    wrColor, toast, openModal, closeModal, showTip, hideTip, ttRows, guard, download, kpi,
+    wrColor, meter, coverCard, artUrl, toast, openModal, closeModal, showTip, hideTip, ttRows, guard, download, kpi,
     heatCell, heatLegend, confusionG1, matchTable, bindMatchRows,
     filtersHTML, bindFilters, emptyState, bindDemo,
     route, renderWho, renderDeckSwitch, manageDecks, start,

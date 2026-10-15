@@ -5,7 +5,7 @@ Dashboard per registrare e analizzare le partite dei nostri mazzi di Magic (Lega
 **Cosa fa**
 - **Più mazzi**: dal selettore "Mazzo" in alto scegli quale dei vostri mazzi stai analizzando (Bant, Dimir, …). Ogni mazzo ha le sue liste, i suoi match, le sue guide di sideboard e le sue statistiche; gli archetipi avversari sono condivisi.
 - **Registra partita** (bottone `+ Partita`): archetipo avversario, G1/G2/G3 vinta/persa, play/draw (G2 e G3 si compilano da soli), sidata usata in G2 e G3 (precompilata dalla guida), giocatore, evento, versione lista, note.
-- **Dashboard**: win rate di match e di game, pre-board e post-board, on the play e on the draw, andamento nel tempo, win rate per matchup, quanto spesso incontrate ogni archetipo, matrice "G1 → esito del match".
+- **Dashboard**: in alto l'illustrazione della carta simbolo del mazzo (scelta automatica o da "Gestisci mazzi"), poi win rate di match e di game, pre-board e post-board, on the play e on the draw, andamento nel tempo, win rate per matchup, quanto spesso incontrate ogni archetipo, matrice "G1 → esito del match".
 - **Matchup**: matrice a colori matchup × situazione (match, game, G1, G2-3, play, draw), più la matrice giocatore × matchup. Cliccando un matchup vedi il dettaglio.
 - **Sideboard**: guida di sideboard per ogni matchup, separata on the play e on the draw; statistiche delle sidate (win rate post-board per piano e per singola carta, guida seguita o no); export in Markdown, CSV e stampa/PDF.
 - **Liste**: versioni della lista con win rate, differenze carta per carta fra una versione e l'altra, confronto fra due versioni, "impatto delle carte" (win rate con e senza ogni carta cambiata), vista a immagini da Scryfall.
@@ -88,6 +88,7 @@ manifest.webmanifest      installazione come app sul telefono
 icons/                    icone dell'app
 config.js                 URL e chiave Supabase
 css/styles.css            stile di base (tema chiaro e scuro automatico)
+css/theme.css             rifinitura grafica (font, navigazione, hero della dashboard)
 css/features.css          stile di sideboard e statistiche delle liste
 css/mobile.css            stile per telefono (barra in basso, tabelle a schede)
 js/core.js                database, stato, statistiche, router, gestione mazzi
