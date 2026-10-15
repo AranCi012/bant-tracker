@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" ry="112" fill="#2a78d6"/>
+  <!-- cerchi sovrapposti, ciascuno con un anello di separazione dello sfondo -->
+  <circle cx="174" cy="256" r="110" fill="#2a78d6"/>
+  <circle cx="174" cy="256" r="97" fill="#f3e7b9"/>
+  <circle cx="256" cy="256" r="110" fill="#2a78d6"/>
+  <circle cx="256" cy="256" r="97" fill="#9ec5f4"/>
+  <circle cx="338" cy="256" r="110" fill="#2a78d6"/>
+  <circle cx="338" cy="256" r="97" fill="#1baf7a"/>
+</svg>

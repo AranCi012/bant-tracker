@@ -1,14 +1,18 @@
-# Bant Meta Tracker
+# Meta Tracker
 
-Dashboard per registrare e analizzare le partite del nostro Bant (Legacy, Phelia & co.) contro i vari archetipi.
+Dashboard per registrare e analizzare le partite dei nostri mazzi di Magic (Legacy: Bant con Phelia & co., ma anche qualunque altro mazzo) contro i vari archetipi.
 
 **Cosa fa**
-- **Registra partita** (bottone `+ Partita`): archetipo avversario, G1/G2/G3 vinta/persa, play/draw (G2 e G3 si compilano da soli), giocatore, evento, versione lista, note. Va bene anche da telefono.
-- **Dashboard**: win rate di match e di game, pre-board e post-board, on the play e on the draw, andamento nel tempo, win rate per matchup, quanto spesso incontrate ogni archetipo, matrice "G1 → esito del match".
-- **Matchup**: matrice a colori matchup × situazione (match, game, G1, G2-3, play, draw), più la matrice giocatore × matchup. Cliccando un matchup vedi il dettaglio e il piano di sideboard.
-- **La nostra lista**: lista modificabile con più versioni. Ogni match resta legato alla versione con cui è stato giocato, quindi le versioni si possono confrontare. Passando il mouse su una carta compare l'immagine da Scryfall.
-- **Avversari**: archetipi modificabili, ognuno con piano di sideboard e note.
+- **Più mazzi**: dal selettore "Mazzo" in alto scegli quale dei vostri mazzi stai analizzando (Bant, Dimir, …). Ogni mazzo ha le sue liste, i suoi match, le sue guide di sideboard e le sue statistiche; gli archetipi avversari sono condivisi.
+- **Registra partita** (bottone `+ Partita`): archetipo avversario, G1/G2/G3 vinta/persa, play/draw (G2 e G3 si compilano da soli), sidata usata in G2 e G3 (precompilata dalla guida), giocatore, evento, versione lista, note.
+- **Dashboard**: in alto l'illustrazione della carta simbolo del mazzo (scelta automatica o da "Gestisci mazzi"), poi win rate di match e di game, pre-board e post-board, on the play e on the draw, andamento nel tempo, win rate per matchup, quanto spesso incontrate ogni archetipo, matrice "G1 → esito del match".
+- **Matchup**: matrice a colori matchup × situazione (match, game, G1, G2-3, play, draw), più la matrice giocatore × matchup. Cliccando un matchup vedi il dettaglio.
+- **Sideboard**: guida di sideboard per ogni matchup, separata on the play e on the draw; statistiche delle sidate (win rate post-board per piano e per singola carta, guida seguita o no); export in Markdown, CSV e stampa/PDF.
+- **Sidate dalle note**: se nelle note scrivi la sidata a parole tue ("side otd: +3 carpet +1 erode; -2 fow -2 fon", "2 stifle out, 2 priest in", "metti le wrath"), l'app la legge da sola: capisce abbreviazioni (fow, fon, stp), parole italiane, play/draw (otp/otd) e i soprannomi che le insegni ("spighe" = Up the Beanstalk), e ignora le carte dell'avversario. Propone, tu confermi o correggi. Per i match già registrati c'è la pagina Sideboard → "Sidate dalle note".
+- **Liste**: versioni della lista con win rate, differenze carta per carta fra una versione e l'altra, confronto fra due versioni (anche per singolo matchup), "impatto delle carte" (win rate con e senza ogni carta cambiata), vista a immagini da Scryfall.
+- **Avversari**: archetipi modificabili con note.
 - **Storico**: modifica ed eliminazione dei match, export CSV, backup e import JSON.
+- **Telefono**: si installa come app (Aggiungi a Home) e il bottone "invita" genera un link o QR code che fa entrare gli amici senza digitare il codice.
 - **Filtri** per giocatore, versione lista, evento e date.
 
 Con pochi match le percentuali ballano parecchio: le celle con meno di 3 match sono tratteggiate e i tooltip mostrano l'intervallo di confidenza al 95%.
@@ -28,7 +32,7 @@ Servono due servizi gratuiti:
 
 1. Registrati su <https://supabase.com> e clicca **New project** (piano Free, regione `eu-central`).
 2. Apri `supabase/schema.sql` e alla riga `CAMBIAMI-metti-una-password` metti il **codice del gruppo** che darai ai tuoi amici.
-3. Su Supabase vai in **SQL Editor → New query**, incolla tutto il file e premi **Run**.
+3. Su Supabase vai in **SQL Editor → New query**, incolla tutto il file e premi **Run**. Poi fai lo stesso con `supabase/migrations/002_multideck_sideboard.sql`.
 4. Vai in **Project Settings → API** (o **Data API / API Keys**) e copia:
    - **Project URL** (`https://xxxx.supabase.co`)
    - la chiave **publishable** o **anon public** (non la `service_role` o `secret`!)
@@ -80,9 +84,23 @@ Consiglio: aggiungete il sito alla home del telefono (Safari: Condividi → Aggi
 ## File
 
 ```
-index.html          pagina
-styles.css          stile (tema chiaro e scuro automatico)
-app.js              tutta la logica (nessuna build, nessuna dipendenza da installare)
-config.js           URL e chiave Supabase
-supabase/schema.sql tabelle, sicurezza, archetipi iniziali
+index.html                pagina (carica i moduli in ordine)
+manifest.webmanifest      installazione come app sul telefono
+icons/                    icone dell'app
+config.js                 URL e chiave Supabase
+css/styles.css            stile di base (tema chiaro e scuro automatico)
+css/theme.css             rifinitura grafica (font, navigazione, hero della dashboard)
+css/features.css          stile di sideboard e statistiche delle liste
+css/mobile.css            stile per telefono (barra in basso, tabelle a schede)
+js/core.js                database, stato, statistiche, router, gestione mazzi
+js/cards.js               immagini e dati delle carte (Scryfall)
+js/notes.js               interprete delle note (trova le sidate scritte a mano)
+js/matchform.js           form per registrare un match (con sidate)
+js/views/*.js             una vista per scheda (dashboard, matchup, sideboard, storico, liste, avversari)
+js/mobile.js              link di invito, QR code, icone della barra in basso
+js/boot.js                avvio
+supabase/schema.sql       tabelle iniziali, sicurezza, archetipi iniziali
+supabase/migrations/      modifiche successive al database (da eseguire in ordine)
 ```
+
+Nessuna build e nessuna dipendenza da installare: sono file statici.

@@ -1,3 +1,4 @@
+// LEGACY v1: resta solo per chi ha in cache la vecchia index.html durante il passaggio alla v2. Da eliminare in seguito.
 (() => {
   "use strict";
 

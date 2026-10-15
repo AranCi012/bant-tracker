@@ -2,11 +2,24 @@
 <html lang="it">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bant Meta Tracker</title>
-  <meta name="description" content="Statistiche dei matchup del nostro Bant Legacy">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%232a78d6'/><path d='M10 17l4 4 8-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/></svg>">
-  <link rel="stylesheet" href="styles.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Meta Tracker</title>
+  <meta name="description" content="Statistiche dei matchup dei nostri mazzi di Magic">
+  <meta name="theme-color" content="#2a78d6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Meta Tracker">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="css/styles.css?v=2">
+  <link rel="stylesheet" href="css/theme.css?v=2">
+  <link rel="stylesheet" href="css/features.css?v=2">
+  <link rel="stylesheet" href="css/mobile.css?v=2">
 </head>
 <body>
   <header class="topbar">
@@ -14,13 +27,18 @@
       <span class="logo" aria-hidden="true">
         <i style="background:var(--mana-w)"></i><i style="background:var(--mana-u)"></i><i style="background:var(--mana-g)"></i>
       </span>
-      <span id="app-name">Bant Meta Tracker</span>
+      <span id="app-name">Meta Tracker</span>
     </div>
-    <nav class="tabs" id="tabs" aria-label="Sezioni">
+    <label class="deck-switch-wrap" id="deck-switch-wrap" hidden>
+      <span class="small muted">Mazzo</span>
+      <select id="deck-switch" aria-label="Mazzo che stai analizzando"></select>
+    </label>
+    <nav class="tabs" id="tabs" aria-label="Sezioni" hidden>
       <a href="#dashboard" data-view="dashboard">Dashboard</a>
       <a href="#matchup" data-view="matchup">Matchup</a>
+      <a href="#sideboard" data-view="sideboard">Sideboard</a>
       <a href="#history" data-view="history">Storico</a>
-      <a href="#deck" data-view="deck">La nostra lista</a>
+      <a href="#deck" data-view="deck">Liste</a>
       <a href="#opponents" data-view="opponents">Avversari</a>
     </nav>
     <div class="who" id="who"></div>
@@ -30,7 +48,7 @@
 
   <main id="view" class="view" aria-live="polite"></main>
 
-  <a href="#add" class="fab" id="fab" aria-label="Registra partita"><span>+</span> Partita</a>
+  <a href="#add" class="fab" id="fab" aria-label="Registra partita" hidden><span>+</span> Partita</a>
 
   <div id="modal" class="modal" hidden>
     <div class="modal-backdrop" data-close></div>
@@ -43,7 +61,18 @@
   <div id="tooltip" class="tooltip" hidden></div>
   <div id="toast" class="toast" hidden></div>
 
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+  <script src="config.js?v=2"></script>
+  <script src="js/core.js?v=2"></script>
+  <script src="js/cards.js?v=2"></script>
+  <script src="js/notes.js?v=2"></script>
+  <script src="js/matchform.js?v=2"></script>
+  <script src="js/views/dashboard.js?v=2"></script>
+  <script src="js/views/matchup.js?v=2"></script>
+  <script src="js/views/sideboard.js?v=2"></script>
+  <script src="js/views/history.js?v=2"></script>
+  <script src="js/views/deck.js?v=2"></script>
+  <script src="js/views/opponents.js?v=2"></script>
+  <script src="js/mobile.js?v=2"></script>
+  <script src="js/boot.js?v=2"></script>
 </body>
 </html>

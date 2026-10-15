@@ -1,0 +1,94 @@
+/* Stili delle funzioni sideboard / statistiche lista. */
+
+/* ---------- Form partita: riepilogo e pannello sideboard ---------- */
+.sb-area { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.sb-box { border: 1px dashed var(--border); border-radius: 10px; padding: 8px 10px; background: var(--surface-2); }
+.sb-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sb-line .btn { margin-left: auto; min-height: 36px; }
+.sb-panel { margin-top: 10px; }
+
+/* ---------- Editor IN / OUT con stepper ---------- */
+.sbe-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 700px) { .sbe-cols { grid-template-columns: minmax(0, 1fr); } }
+.sbe-col h4 { margin: 0 0 6px; font-size: .85rem; text-transform: uppercase; letter-spacing: .03em; color: var(--text-2); display: flex; justify-content: space-between; }
+.sbe-col.in h4 .num { color: var(--win); }
+.sbe-col.out h4 .num { color: var(--loss); }
+.sbe-list { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+.sbe-row { display: flex; align-items: center; gap: 8px; padding: 2px 6px; border-radius: 8px; border: 1px solid transparent; }
+.sbe-row.on { background: color-mix(in srgb, var(--accent) 10%, transparent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.sbe-row .sbe-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sbe-row .sbe-max { color: var(--text-3); font-size: .78rem; width: 26px; }
+.sbe-step { display: inline-flex; align-items: center; gap: 2px; }
+.sbe-step b { min-width: 24px; text-align: center; font-variant-numeric: tabular-nums; }
+.sbe-step button { width: 44px; height: 44px; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; font-size: 1.2rem; font-weight: 700; cursor: pointer; line-height: 1; }
+.sbe-step button:disabled { opacity: .35; cursor: not-allowed; }
+.sbe-step button:not(:disabled):active { background: var(--surface-2); }
+.sbe-add { display: flex; gap: 6px; margin-top: 8px; }
+.sbe-add input { flex: 1; min-width: 0; }
+.sbe-add .btn, .sbe-actions .btn { min-height: 44px; }
+.sbe-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+/* ---------- Panoramica sideboard ---------- */
+.sb-table td.sb-cell { white-space: normal; min-width: 170px; max-width: 280px; vertical-align: top; }
+tr.lowrow { opacity: .55; }
+td.lowrow { opacity: .8; }
+
+/* ---------- Lista: versioni, differenze, confronto, impatto ---------- */
+.version.vx { display: block; cursor: pointer; }
+.vx-stats { margin-top: 2px; }
+.vx-stats.lowv { opacity: .85; }
+.diff { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.diff-row { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.diff-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; color: var(--text-2); min-width: 34px; }
+.cmp-pick { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.cmp-pick .field { min-width: 0; flex: 1 1 180px; }
+.bk-cell { white-space: normal !important; min-width: 220px; }
+.bk { display: inline-block; margin: 2px 6px 2px 0; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); font-size: .8rem; white-space: nowrap; }
+.bk.low { background-image: repeating-linear-gradient(45deg, transparent 0 5px, rgba(127,127,127,.25) 5px 6px); color: var(--text-2); }
+.bk small { color: var(--text-2); }
+.vis { min-height: 40px; }
+
+/* ---------- Stampa / PDF della guida ---------- */
+@media print {
+  .topbar, .fab, #tabs, #banner, #toast, #deck-switch-wrap, .no-print, .filters, button, .btn { display: none !important; }
+  body { background: #fff; color: #000; }
+  .card { box-shadow: none; border: 1px solid #bbb; break-inside: avoid; }
+  .table-wrap { overflow: visible; }
+  .heat td.cell { background: #fff !important; color: #000 !important; border: 1px solid #ccc; }
+  .sb-in, .sb-out { border: 1px solid #999; background: #fff; color: #000; }
+  .sbe-step button, .sbe-add { display: none !important; }
+  a { color: inherit; text-decoration: none; }
+}
+
+/* ---------- Sidate dalle note ---------- */
+.notes-panel { border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.np-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; font-size: .9rem; }
+.np-conf { font-size: .75rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text-2); }
+.np-conf.c-alta { background: color-mix(in srgb, var(--win) 18%, transparent); color: var(--win); }
+.np-conf.c-bassa { background: color-mix(in srgb, var(--loss) 15%, transparent); color: var(--loss); }
+.np-lines { display: flex; flex-direction: column; gap: 4px; }
+.np-g { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.np-teach { display: flex; flex-direction: column; gap: 6px; }
+.np-unk { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.np-unk select, .np-unk input { min-width: 0; max-width: 100%; flex: 1 1 140px; }
+.np-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.np-actions:empty { display: none; }
+.nb-badge { font-size: .7rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+
+/* evidenziazione nelle note */
+mark.ev-in, mark.ev-out, mark.ev-keep, mark.ev-ign { border-radius: 4px; padding: 0 2px; color: inherit; }
+mark.ev-in { background: color-mix(in srgb, var(--win) 25%, transparent); }
+mark.ev-out { background: color-mix(in srgb, var(--loss) 22%, transparent); }
+mark.ev-keep { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+mark.ev-ign { background: transparent; text-decoration: line-through; opacity: .6; }
+
+/* ---------- Vista #sideboard/note ---------- */
+.nt-link { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.nt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+.nt-item { display: flex; flex-direction: column; gap: 8px; }
+.nt-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.nt-note { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
+.nt-games { display: flex; flex-direction: column; gap: 6px; }
+.nt-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.nt-actions .btn { min-height: 40px; }
+.nt-edit h4 { margin: 8px 0 4px; }
