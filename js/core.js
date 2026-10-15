@@ -160,7 +160,7 @@
     guides: [],       // sideboard_guides (per coppia mazzo × archetipo)
     deckId: lsGet("deckId", ""),
     me: lsGet("me", ""),
-    filters: Object.assign({ player: "", version: "", event: "", from: "", to: "" }, lsGet("filters", {})),
+    filters: { player: "", version: "", event: "", from: "", to: "" }, // ogni visita parte da "tutti i match"
     deckSel: null,
     ready: false,
   };
@@ -428,10 +428,13 @@
       <label class="small muted">dal <input type="date" data-f="from" value="${esc(f.from)}"></label>
       <label class="small muted">al <input type="date" data-f="to" value="${esc(f.to)}"></label>
       ${active ? `<button class="btn ghost sm chip-reset" id="f-reset">✕ Azzera filtri</button>` : ""}
-    </div>`;
+    </div>
+    ${active ? `<div class="filter-warn" role="status">🔎 Filtri attivi: stai vedendo <b>${filtered().length}</b> match su <b>${deckMatches().length}</b>. <button class="btn sm" id="f-reset2">Mostra tutti</button></div>` : ""}`;
   }
   function bindFilters(root, rerender) {
     $$("[data-f]", root).forEach((el) => (el.onchange = () => { S.filters[el.dataset.f] = el.value; lsSet("filters", S.filters); rerender(); }));
+    const r2 = $("#f-reset2", root);
+    if (r2) r2.onclick = () => { S.filters = { player: "", version: "", event: "", from: "", to: "" }; lsSet("filters", S.filters); rerender(); };
     const r = $("#f-reset", root);
     if (r) r.onclick = () => { S.filters = { player: "", version: "", event: "", from: "", to: "" }; lsSet("filters", S.filters); rerender(); };
   }
