@@ -92,3 +92,35 @@ mark.ev-ign { background: transparent; text-decoration: line-through; opacity: .
 .nt-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .nt-actions .btn { min-height: 40px; }
 .nt-edit h4 { margin: 8px 0 4px; }
+
+/* ---------- Statistiche medie delle sidate (A.sbstats) ---------- */
+.sb-actions { flex-wrap: wrap; }
+.sb-actions .btn { min-height: 40px; }
+.sb-more { margin: 0 0 14px; }
+.sb-more summary { cursor: pointer; padding: 6px 0; }
+.sbs-sentences { margin: 0 0 8px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.sbs-h { margin: 14px 0 8px; }
+.sbs-seg { margin-bottom: 8px; }
+.sbs-seg button.on { background: var(--text); color: var(--surface); }
+.sbs-note { margin: 4px 0 10px; }
+.sbs-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 700px) { .sbs-cols { grid-template-columns: minmax(0, 1fr); } }
+.sbs-col h3 { margin: 0 0 6px; font-size: .85rem; text-transform: uppercase; letter-spacing: .03em; color: var(--text-2); }
+.sbs-col.in h3 { color: var(--win); }
+.sbs-col.out h3 { color: var(--loss); }
+.sbs-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sbs-card { padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.sbs-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sbs-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.sbs-tier { flex: none; font-size: .7rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
+.sbs-tier.t-chiave { background: var(--accent); color: #fff; }
+.sbs-tier.t-routine { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.sbs-tier.t-occasionale { background: var(--surface); color: var(--text-2); border: 1px solid var(--border); }
+.sbs-bar { height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--text-2) 18%, transparent); margin: 6px 0 4px; overflow: hidden; }
+.sbs-bar i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.sbs-meta { font-size: .8rem; color: var(--text-2); }
+.sbs-meta b { color: var(--text); }
+.sbs-col details { margin-top: 8px; }
+.sbs-col details .sbs-list { margin-top: 8px; }
+.sbs-typ { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0; }
+@media print { .sbs-seg { display: none !important; } .sbs-tier.t-chiave { background: #fff; color: #000; border: 1px solid #000; } .sbs-bar i { background: #666; } }

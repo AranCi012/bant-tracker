@@ -1,1 +1,138 @@
-/* Report leggibile e stampa (Haiku). */
+/* Report leggibile e stampa (Haiku). Usato dalla vista #report e inline nel file .html scaricato. */
+
+.rp-wrap { max-width: 780px; margin: 0 auto; padding: 0 16px 56px; }
+.rp-toolbar { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; margin: 4px 0 12px; }
+.rp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.rp-filters { margin-bottom: 16px; }
+
+/* ---------- Foglio ---------- */
+.report {
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px);
+  box-shadow: var(--shadow); padding: 44px 52px 40px;
+  font-size: 15px; line-height: 1.6; font-feature-settings: "cv11", "ss01";
+  overflow-wrap: anywhere;
+}
+.report *, .report *::before, .report *::after { box-sizing: border-box; }
+
+/* ---------- Intestazione ---------- */
+.report .rp-kicker { margin: 0 0 6px; font-size: .74rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
+.report h1 { margin: 0; font-size: 2.1rem; line-height: 1.15; letter-spacing: -.025em; font-weight: 800; }
+.report .rp-sub { margin: 8px 0 0; color: var(--text-2); font-size: .98rem; }
+.report .rp-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 22px 0 0; padding: 16px 0 0; border-top: 1px solid var(--border); }
+.report .rp-facts dt { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); font-weight: 650; }
+.report .rp-facts dd { margin: 2px 0 0; font-weight: 600; font-size: .95rem; }
+
+/* ---------- Sezioni ---------- */
+.report .rp-sec { margin-top: 38px; }
+.report h2 {
+  position: relative; margin: 0 0 16px; padding-bottom: 9px;
+  font-size: 1.22rem; font-weight: 750; letter-spacing: -.01em;
+  border-bottom: 1px solid var(--border);
+}
+.report h2::after { content: ""; position: absolute; left: 0; bottom: -1px; width: 56px; height: 2px; border-radius: 2px; background: var(--accent); }
+.report h3 { margin: 0; font-size: 1.05rem; font-weight: 750; }
+.report h4 { margin: 14px 0 6px; font-size: .74rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); font-weight: 700; }
+.report .rp-h3 { margin: 26px 0 6px; font-size: 1.05rem; }
+.report p { margin: 0 0 10px; }
+.report .rp-lead p { margin: 0 0 12px; font-size: 1.06rem; line-height: 1.6; }
+.report .rp-lead p:last-child { margin-bottom: 0; }
+.report .rp-muted { color: var(--text-2); }
+.report .rp-small { font-size: .86rem; color: var(--text-2); }
+.report .rp-list { margin: 0 0 6px; padding-left: 1.15em; }
+.report .rp-list li { margin: 6px 0; }
+
+/* ---------- Tabella matchup ---------- */
+.report .table-wrap { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+.report .rp-table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+.report .rp-table th {
+  text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--text-3); font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.report .rp-table td { padding: 10px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+.report .rp-table tbody tr:nth-child(even) td { background: var(--surface-2); }
+.report .rp-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.report .rp-table th.num { text-align: right; }
+.report .rp-wr { white-space: nowrap; }
+.report .rp-meter { position: relative; display: inline-block; width: 92px; height: 7px; margin-right: 8px; border-radius: 99px; background: var(--grid); vertical-align: middle; }
+.report .rp-meter i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; }
+.report .rp-meter b { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--text-3); }
+.report .rp-com { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: .8rem; font-weight: 650; white-space: nowrap; }
+.report .rp-com.fav { background: color-mix(in srgb, var(--win) 16%, transparent); color: var(--win); }
+.report .rp-com.unf { background: color-mix(in srgb, var(--loss) 16%, transparent); color: var(--loss); }
+.report .rp-com.eq { background: var(--surface-2); color: var(--text-2); }
+.report .rp-com.low { background: transparent; color: var(--text-3); border: 1px dashed var(--border); }
+
+/* ---------- Badge, chip, liste carte ---------- */
+.report .rp-badge { display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 99px; font-size: .7rem; font-weight: 700; letter-spacing: .02em; white-space: nowrap; vertical-align: 1px; }
+.report .rp-badge.chiave { background: var(--accent); color: var(--accent-ink); }
+.report .rp-badge.routine { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+.report .rp-badge.occasionale { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
+.report .rp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.report .rp-cols > div { min-width: 0; }
+.report .rp-ul { list-style: none; margin: 0; padding: 0; }
+.report .rp-ul li { display: flex; flex-direction: column; gap: 2px; padding: 9px 0; border-bottom: 1px solid var(--grid); }
+.report .rp-ul .nm { font-weight: 650; }
+.report .rp-ul .det { font-size: .84rem; color: var(--text-2); }
+.report .rp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.report .rp-chip { display: inline-block; padding: 2px 9px; border-radius: 8px; font-size: .86rem; font-weight: 600; line-height: 1.4; color: var(--text); }
+.report .rp-chip.in { background: color-mix(in srgb, var(--win) 14%, transparent); border: 1px solid color-mix(in srgb, var(--win) 35%, transparent); }
+.report .rp-chip.out { background: color-mix(in srgb, var(--loss) 12%, transparent); border: 1px solid color-mix(in srgb, var(--loss) 35%, transparent); }
+
+/* ---------- Blocchi per matchup ---------- */
+.report .rp-matchup { padding: 20px 0 6px; margin-top: 20px; border-top: 1px solid var(--border); break-inside: avoid; page-break-inside: avoid; }
+.report .rp-matchups > .rp-matchup:first-child { border-top: 0; margin-top: 8px; padding-top: 4px; }
+.report .rp-matchup-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; }
+.report .rp-plans { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+.report .rp-plan { background: var(--surface-2); border-radius: 10px; padding: 10px 14px 12px; break-inside: avoid; page-break-inside: avoid; }
+.report .rp-plan h4 { margin-top: 0; }
+.report .rp-plan p { margin: 8px 0 0; }
+.report .rp-guide { margin-top: 14px; break-inside: avoid; page-break-inside: avoid; }
+.report .rp-guide-line { margin: 6px 0; }
+.report .rp-guide-line .rp-chips { display: inline-flex; vertical-align: middle; }
+.report .rp-notes { margin: 10px 0 0; padding: 8px 12px; border-left: 3px solid var(--accent); border-radius: 6px; background: var(--surface-2); font-size: .93rem; }
+
+/* ---------- Piede ---------- */
+.report .rp-foot { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--text-3); font-size: .82rem; }
+.report .rp-foot p { margin: 4px 0; }
+
+/* ---------- Telefono ---------- */
+@media (max-width: 640px) {
+  .rp-wrap { padding: 0 16px 40px; }
+  .report { padding: 24px 18px 26px; }
+  .report h1 { font-size: 1.6rem; }
+  .report .rp-facts { grid-template-columns: 1fr 1fr; gap: 12px 10px; }
+  .report .rp-cols, .report .rp-plans { grid-template-columns: 1fr; }
+  .report .rp-table th, .report .rp-table td { padding: 8px 6px; }
+  .report .rp-meter { width: 60px; }
+  .report .rp-sec { margin-top: 30px; }
+}
+
+/* ---------- Stampa (PDF da finestra di stampa, A4 chiaro) ---------- */
+@page { size: A4; margin: 14mm; }
+@media print {
+  html, body { background: #fff !important; color: #000 !important; }
+  body { padding: 0 !important; }
+  .topbar, #tabs, .fab, .banner, #toast, #tooltip, #deck-switch-wrap, .no-print, .filters, .rp-toolbar, button { display: none !important; }
+  .rp-wrap { max-width: none; padding: 0; margin: 0; }
+  .report {
+    --bg: #fff; --surface: #fff; --surface-2: #f4f4f2; --border: #cfcfcc; --grid: #e6e6e3;
+    --text: #000; --text-2: #333; --text-3: #555; --accent: #1f4f8f; --accent-ink: #fff;
+    --win: #1f4f8f; --loss: #b3261e; --shadow: none;
+    background: #fff; color: #000; border: 0; border-radius: 0; box-shadow: none; padding: 0;
+    font-size: 10.5pt; line-height: 1.5;
+  }
+  .report .rp-sec { margin-top: 20px; }
+  .report h2 { font-size: 13pt; }
+  .report h1 { font-size: 20pt; }
+  .report .rp-lead p { font-size: 11pt; }
+  .report .table-wrap { overflow: visible; margin: 0; padding: 0; }
+  .report .rp-table thead { display: table-header-group; }
+  .report .rp-table tr, .report .rp-ul li, .report .rp-facts, .report .rp-plan, .report .rp-guide, .report .rp-matchup, .report .rp-notes {
+    break-inside: avoid; page-break-inside: avoid;
+  }
+  .report h2, .report h3, .report h4 { break-after: avoid; page-break-after: avoid; }
+  .report .rp-matchup { border-top-color: #cfcfcc; }
+  .report a { color: inherit; text-decoration: none; }
+  .report .rp-foot { margin-top: 24px; }
+}

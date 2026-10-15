@@ -84,6 +84,59 @@
   const slug = (s) => String(s || "mazzo").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
   // ---------------------------------------------------------------------
+  //  Statistiche medie (A.sbstats): componente "carte più sidate"
+  // ---------------------------------------------------------------------
+  const TIER_LABEL = { chiave: "Chiave", routine: "Routine", occasionale: "Occasionale" };
+  const SIDE_TABS = [["all", "Tutte"], ["play", "On the play"], ["draw", "On the draw"]];
+  const boardSide = { v: "all" }; // lato scelto, condiviso tra le viste
+
+  function cardItemHTML(c, dir, scope, n) {
+    const r = (sd) => { const st = scope.sides[sd]; if (!st.n) return "—"; const f = st.cards[dir].find((x) => x.key === c.key); return `${f ? Math.round(f.rate * 100) : 0}%`; };
+    const p = Math.round(c.rate * 100);
+    return `<li class="sbs-card"><div class="sbs-top"><span class="sbs-name" data-card="${esc(c.name)}">${esc(c.name)}</span><span class="sbs-tier t-${esc(c.tier)}">${TIER_LABEL[c.tier]}</span></div>
+      <div class="sbs-bar" role="img" aria-label="${p}%"><i style="width:${p}%"></i></div>
+      <div class="sbs-meta"><b>${p}%</b> <span class="muted">(${c.games} su ${n})</span> · otp ${r("play")} · otd ${r("draw")} · di solito ${c.modeQ} ${c.modeQ === 1 ? "copia" : "copie"}</div></li>`;
+  }
+  function cardColHTML(title, dir, scope, st) {
+    const cs = st.cards[dir], LIM = 8;
+    const list = (xs) => `<ul class="sbs-list">${xs.map((c) => cardItemHTML(c, dir, scope, st.n)).join("")}</ul>`;
+    return `<div class="sbs-col ${dir}"><h3>${title}</h3>${cs.length ? list(cs.slice(0, LIM)) : `<p class="muted small">Nessuna carta.</p>`}
+      ${cs.length > LIM ? `<details><summary class="muted small">Altre ${cs.length - LIM} carte</summary>${list(cs.slice(LIM))}</details>` : ""}</div>`;
+  }
+  function boardInnerHTML(scope) {
+    const st = scope.sides[boardSide.v];
+    const lab = boardSide.v === "play" ? " on the play" : boardSide.v === "draw" ? " on the draw" : "";
+    if (!st.n) return `<p class="muted">Nessuna sidata registrata${lab || " con questi filtri"}.${boardSide.v === "all" ? " Registra o conferma qualche sidata (anche dalle note) per vedere le statistiche." : " Prova con “Tutte”."}</p>`;
+    return `<p class="muted small sbs-note">${st.n} ${st.n === 1 ? "sidata" : "sidate"} registrat${st.n === 1 ? "a" : "e"}${lab}${st.n < 3 ? " · ancora pochi dati: le percentuali vanno prese con cautela" : ""}.
+      Chiave = quasi sempre (almeno ${Math.round(A.sbstats.TIERS.chiave * 100)}%) · Routine = spesso (almeno ${Math.round(A.sbstats.TIERS.routine * 100)}%) · Occasionale = più raramente.</p>
+      <div class="sbs-cols">${cardColHTML("Entrano", "in", scope, st)}${cardColHTML("Escono", "out", scope, st)}</div>`;
+  }
+  // Monta toggle Tutte/play/draw + liste in host
+  function mountBoard(host, scope) {
+    host.innerHTML = `<div class="seg sbs-seg" role="group" aria-label="Lato">${SIDE_TABS.map(([v, l]) => `<button type="button" data-side="${v}" class="${boardSide.v === v ? "on" : ""}" data-p="1">${l}</button>`).join("")}</div><div class="sbs-body"></div>`;
+    const body = $(".sbs-body", host);
+    const draw = () => {
+      body.innerHTML = boardInnerHTML(scope);
+      $$(".sbs-seg button", host).forEach((b) => b.classList.toggle("on", b.dataset.side === boardSide.v));
+      if (A.cards && A.cards.bindHover) A.cards.bindHover(body);
+    };
+    $$(".sbs-seg button", host).forEach((b) => { b.onclick = () => { boardSide.v = b.dataset.side; draw(); }; });
+    draw();
+  }
+  const sentencesHTML = (xs) => `<ul class="sbs-sentences">${xs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+
+  // Riassunto in testo semplice (WhatsApp)
+  function summaryText(report, deck) {
+    const out = [`*Sidate · ${deck.name}*`, `(${A.today()})`, ""];
+    for (const h of A.sbstats.highlights(report, { max: 8 })) out.push(`• ${h}`);
+    for (const e of report.byArch) {
+      out.push("", `*${e.name}*`);
+      for (const s of A.sbstats.archSummary(report, e.archId)) out.push(s);
+    }
+    return out.join("\n");
+  }
+
+  // ---------------------------------------------------------------------
   //  Dati della panoramica
   // ---------------------------------------------------------------------
   function overviewRows(ms) {
@@ -149,21 +202,32 @@
   function viewOverview(root) {
     const deck = A.currentDeck();
     const rows = overviewRows(A.filtered());
+    const report = A.sbstats.analyze(A.filtered());
     const guideCell = (r, sd) => {
       const l = guideLists(r.guide, sd);
       return l.in.length || l.out.length ? A.sbSummaryHTML(l) : `<span class="muted small">—</span>`;
     };
     root.innerHTML = `
       <div class="page-head"><h1>Sideboard <span class="muted" style="font-weight:500">· ${esc(deck.name)}</span></h1>
-        <div class="inline no-print">
+        <div class="inline no-print sb-actions">
+          <a class="btn primary" href="#report" id="sb-report">📄 Report leggibile</a>
+          <button class="btn" id="sb-sum">📋 Copia riassunto</button>
+          <button class="btn sm" id="sb-print">Stampa / PDF</button>
+        </div></div>
+      <details class="no-print sb-more"><summary class="muted small">Altri formati (per smanettoni)</summary>
+        <div class="inline" style="margin-top:8px;flex-wrap:wrap">
           <button class="btn sm" id="sb-md">Esporta guida (.md)</button>
           <button class="btn sm" id="sb-copy">Copia guida</button>
           <button class="btn sm" id="sb-csv">Esporta statistiche (.csv)</button>
           <button class="btn sm" id="sb-csv2">Esporta carte (.csv)</button>
-          <button class="btn sm" id="sb-print">Stampa / PDF</button>
-        </div></div>
+        </div></details>
       ${A.notes ? `<div class="card nt-link no-print"><span>Le sidate si possono leggere dalle note dei match.</span><a class="btn primary" href="#sideboard/note">📝 Sidate dalle note (${reviewCount()} da rivedere)</a></div>` : ""}
       <div class="no-print">${A.filtersHTML()}</div>
+      <div class="card" id="sb-summary">
+        <div class="section-head"><h2>Riassunto sidate</h2><span class="muted small">In media, sulle sidate registrate</span></div>
+        ${sentencesHTML(A.sbstats.highlights(report, { max: 8 }))}
+        <h3 class="sbs-h">Carte più sidate</h3><div id="sb-board"></div>
+      </div>
       ${!rows.length ? `<div class="card empty-state"><p>Ancora nessuna guida né game post-board per questo mazzo.<br>Apri un matchup dalla <a href="#matchup">matrice</a> oppure scegli un archetipo qui sotto per scrivere la prima guida.</p>
         <div class="inline" style="justify-content:center;flex-wrap:wrap">${S.archetypes.slice(0, 12).map((a) => `<a class="btn sm" href="#sideboard/${encodeURIComponent(a.id)}">${esc(a.name)}</a>`).join("")}</div></div>` : `
       <div class="card">
@@ -183,13 +247,16 @@
       </div>`}`;
     A.bindFilters(root, () => viewOverview(root));
     if (A.cards && A.cards.bindHover) A.cards.bindHover(root);
+    mountBoard($("#sb-board", root), report.overall);
     const b = (id, fn) => { const el = $(id, root); if (el) el.onclick = fn; };
     const base = `sideboard-${slug(deck.name)}`;
+    b("#sb-sum", () => copyText(summaryText(report, deck), "Riassunto copiato: incollalo dove vuoi"));
     b("#sb-md", () => A.download(`${base}.md`, guideMarkdown(rows), "text/markdown"));
     b("#sb-copy", () => copyText(guideMarkdown(rows), "Guida copiata"));
     b("#sb-csv", () => A.download(`${base}-statistiche.csv`, statsCsv(rows), "text/csv"));
     b("#sb-csv2", () => A.download(`${base}-carte.csv`, cardsCsv(rows), "text/csv"));
     b("#sb-print", () => window.print());
+    if (!report.totalPost) { const el = $("#sb-sum", root); if (el) el.disabled = true; }
     if (!rows.length) ["#sb-md", "#sb-copy", "#sb-csv", "#sb-csv2", "#sb-print"].forEach((id) => { const el = $(id, root); if (el) el.disabled = true; });
   }
 
@@ -220,6 +287,7 @@
           <button class="btn primary" id="sd-save">Salva guida</button>
         </div>
       </div>
+      <div class="card" id="sd-media"></div>
       <div class="no-print">${A.filtersHTML()}</div>
       <div id="sd-stats"></div>`;
 
@@ -245,7 +313,29 @@
       viewDetail(root, archId);
     });
     A.bindFilters(root, () => viewDetail(root, archId));
+    renderMedia($("#sd-media", root), ms, archId);
     renderStats($("#sd-stats", root), ms, archId);
+  }
+
+  // Card "In media": frasi, sidata tipica per lato, carte per fascia
+  function renderMedia(el, ms, archId) {
+    const report = A.sbstats.analyze(ms), e = report.byArch.find((x) => x.archId === archId);
+    let h = `<div class="section-head"><h2>In media</h2><span class="muted small">Sidate registrate contro questo archetipo · filtri applicati</span></div>`;
+    if (!e) {
+      h += `<p class="muted">${report.totalPost ? "Nessuna sidata registrata con questi filtri. Registra o conferma qualche sidata (anche dalle note) per vedere le statistiche." : "Nessuna game post-board (G2/G3) con questi filtri."}</p>`;
+      el.innerHTML = h; return;
+    }
+    h += sentencesHTML(A.sbstats.archSummary(report, archId));
+    for (const [sd, label] of SIDES) {
+      const st = e.scope.sides[sd];
+      if (!st.n || !(st.typical.in.length || st.typical.out.length)) continue;
+      const used = Math.round(st.typical.support * st.n);
+      h += `<div class="sbs-typ"><b>${label}</b> ${A.sbSummaryHTML(st.typical)}<span class="muted small">${used ? `usata in ${used} su ${st.n}` : `nessuna sidata identica alla tipica (${st.n} registrate)`}</span></div>`;
+    }
+    h += `<h3 class="sbs-h">Carte per fascia</h3><div class="sbs-board"></div>`;
+    el.innerHTML = h;
+    mountBoard($(".sbs-board", el), e.scope);
+    if (A.cards && A.cards.bindHover) A.cards.bindHover(el);
   }
 
   function renderStats(el, ms, archId) {
