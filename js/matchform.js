@@ -321,7 +321,7 @@
       if (!name || !name.trim()) return;
       A.guard(async () => {
         const ex = S.archetypes.find((a) => a.name.toLowerCase() === name.trim().toLowerCase());
-        const a = ex || (await DB.insert("archetypes", { name: name.trim(), sideboard_plan: "", notes: "" }));
+        const a = ex || (await DB.insert("archetypes", { name: A.archName(name), sideboard_plan: "", notes: "" }));
         if (!ex) { S.archetypes.push(a); S.archetypes.sort((x, y) => x.name.localeCompare(y.name)); }
         const sel = form.archetype_id;
         sel.innerHTML = `<option value="">— scegli —</option>` + S.archetypes.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("");

@@ -28,6 +28,8 @@
   const pct = (x, d = 0) => (x == null || isNaN(x) ? "—" : (x * 100).toFixed(d) + "%");
   // "mario  longo" -> "Mario Longo" (nomi dei nostri giocatori)
   const titleName = (s) => String(s || "").trim().replace(/\s+/g, " ").toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (m, p, c) => p + c.toUpperCase());
+  // Nomi dei mazzi avversari: sigle di colore in maiuscolo ("wr gatti" -> "WR gatti", "mono u S&T" -> "Mono U S&T"), prima lettera maiuscola
+  const archName = (s) => { const t = String(s || "").trim().replace(/\s+/g, " ").split(" ").map((w) => (/^[wubrg]{1,3}$/.test(w) ? w.toUpperCase() : w)).join(" "); return t.charAt(0).toUpperCase() + t.slice(1); };
   const fmtDate = (d) => { if (!d) return ""; const [y, m, g] = d.split("-"); return `${g}/${m}/${y.slice(2)}`; };
 
   const DEFAULT_ARCHETYPES = [
@@ -663,7 +665,7 @@
   // =====================================================================
   Object.assign(App, {
     CFG, REMOTE, LOW_N, EVENTS, DB, S,
-    $, $$, esc, lsGet, lsSet, uid, today, pct, fmtDate, titleName,
+    $, $$, esc, lsGet, lsSet, uid, today, pct, fmtDate, titleName, archName,
     cardKey, parseList, countList, listMap, listToText,
     reload, currentDeck, setDeck, aliases, saveAliases, versions, versionById, activeVersion, deckMatches, guideFor, saveGuide,
     archById, players, chrono,

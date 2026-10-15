@@ -60,7 +60,7 @@
       };
       f.onsubmit = (e) => {
         e.preventDefault();
-        const name = f.name.value.trim();
+        const name = A.archName(f.name.value);
         if (S.archetypes.some((x) => x.name.toLowerCase() === name.toLowerCase() && x.id !== a?.id)) { A.toast("Esiste già un archetipo con questo nome"); return; }
         const row = { name, notes: f.notes.value.trim() };
         A.guard(async () => {
