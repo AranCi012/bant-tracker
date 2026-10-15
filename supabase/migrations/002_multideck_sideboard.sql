@@ -14,6 +14,8 @@ create table if not exists public.decks (
 );
 -- Carta di copertina del mazzo (illustrazione in testa alla dashboard)
 alter table public.decks add column if not exists cover_card text not null default '';
+-- Soprannomi delle carte usati nelle note: {"spighe": "Up the Beanstalk", ...}
+alter table public.decks add column if not exists card_aliases jsonb not null default '{}'::jsonb;
 
 alter table public.decklists add column if not exists deck_id uuid references public.decks(id) on delete cascade;
 alter table public.matches   add column if not exists deck_id uuid references public.decks(id) on delete restrict;

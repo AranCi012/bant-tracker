@@ -217,6 +217,17 @@
   }
   const artUrl = (name) => `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}&format=image&version=art_crop`;
 
+  // Soprannomi delle carte del mazzo corrente (usati per leggere le note): { "spighe": "Up the Beanstalk" }
+  const aliases = () => { const d = currentDeck(); return (d && d.card_aliases && typeof d.card_aliases === "object") ? d.card_aliases : {}; };
+  async function saveAliases(map) {
+    const d = currentDeck(); if (!d) throw new Error("Nessun mazzo selezionato");
+    const clean = {};
+    for (const [k, v] of Object.entries(map || {})) { const kk = cardKey(k), vv = String(v || "").trim(); if (kk && vv) clean[kk] = vv; }
+    const u = await DB.update("decks", d.id, { card_aliases: clean });
+    S.decks = S.decks.map((x) => (x.id === d.id ? { ...x, ...u } : x));
+    return clean;
+  }
+
   const archById = (id) => S.archetypes.find((a) => a.id === id);
   const players = () => [...new Set(S.matches.map((m) => m.player).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const chrono = (ms) => [...ms].sort((a, b) => (a.played_at || "").localeCompare(b.played_at || "") || (a.created_at || "").localeCompare(b.created_at || ""));
@@ -651,7 +662,7 @@
     CFG, REMOTE, LOW_N, EVENTS, DB, S,
     $, $$, esc, lsGet, lsSet, uid, today, pct, fmtDate,
     cardKey, parseList, countList, listMap, listToText,
-    reload, currentDeck, setDeck, versions, versionById, activeVersion, deckMatches, guideFor, saveGuide,
+    reload, currentDeck, setDeck, aliases, saveAliases, versions, versionById, activeVersion, deckMatches, guideFor, saveGuide,
     archById, players, chrono,
     gamesOf, matchResult, wilson, stats, record, filtered, byArchetype,
     wrColor, meter, coverCard, artUrl, toast, openModal, closeModal, showTip, hideTip, ttRows, guard, download, kpi,
