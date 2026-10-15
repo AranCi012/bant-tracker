@@ -20,6 +20,29 @@
 .mu-pick { all: unset; cursor: pointer; color: var(--accent); font-weight: 600; text-decoration: underline dotted; text-underline-offset: 3px; }
 .mu-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .heat tr.mu-low { opacity: .55; }
+.ic-how { margin: 0 0 12px; }
+.ic-how summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+.ic-card { border: 1px solid var(--border); border-left: 4px solid var(--text-3); border-radius: 10px; padding: 10px 12px; margin: 0 0 10px; background: var(--surface); }
+.ic-card.v-pos { border-left-color: var(--win); } .ic-card.v-neg { border-left-color: var(--loss); }
+.ic-card.v-pos-l { border-left-color: color-mix(in srgb, var(--win) 45%, var(--surface)); } .ic-card.v-neg-l { border-left-color: color-mix(in srgb, var(--loss) 45%, var(--surface)); }
+.ic-card.v-low { opacity: .8; }
+.ic-chips span { font-size: .85rem !important; }
+.ic-chips small { opacity: .75; }
+.ic-neu { background: var(--surface-2); color: var(--text-2); }
+.ic-vers { margin: 6px 0 0; }
+.ic-sentence { margin: 8px 0 6px; }
+.ic-verdict { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.ic-badge { font-size: .78rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
+.v-pos .ic-badge { background: color-mix(in srgb, var(--win) 16%, transparent); color: var(--win); }
+.v-neg .ic-badge { background: color-mix(in srgb, var(--loss) 16%, transparent); color: var(--loss); }
+.v-pos-l .ic-badge { background: color-mix(in srgb, var(--win) 8%, transparent); color: var(--win); }
+.v-neg-l .ic-badge { background: color-mix(in srgb, var(--loss) 8%, transparent); color: var(--loss); }
+.ic-svg { display: block; width: 100%; max-width: 420px; height: auto; }
+.ic-lab { font-size: 9px; fill: var(--text-2); } .ic-tick { font-size: 8px; fill: var(--text-3); }
+.ic-axis { stroke: var(--border); stroke-width: 1; } .ic-ref { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 2 2; }
+.ic-line { stroke-width: 2; } .ic-line.c1 { stroke: var(--series-1); } .ic-line.c2 { stroke: var(--text-3); }
+.ic-dot.c1 { fill: var(--series-1); } .ic-dot.c2 { fill: var(--text-3); }
+.ic-note, .ic-detail { margin: 6px 0 0; }
 @media (max-width: 640px) {
   .matchup-bar { flex-direction: column; align-items: stretch; }
   .matchup-bar select { width: 100%; min-width: 0; }
@@ -124,60 +147,187 @@
   }
 
   // ---- Impatto delle carte -----------------------------------------------
-  // Match del mazzo con una versione esistente; filtri giocatore/evento/data della barra, IGNORANDO il filtro versione.
+  // Filtri giocatore/evento/data della barra, IGNORANDO il filtro versione.
+  const impactScope = (m) => {
+    const f = S.filters;
+    return inScope(m) && (!f.player || m.player === f.player) && (!f.event || m.event === f.event) &&
+      (!f.from || (m.played_at || "") >= f.from) && (!f.to || (m.played_at || "") <= f.to);
+  };
+  // Match del mazzo con una versione esistente
   function impactMatches() {
-    const f = S.filters, ids = new Set(A.versions().map((v) => v.id));
-    return A.deckMatches().filter((m) => ids.has(m.decklist_id) && inScope(m) &&
-      (!f.player || m.player === f.player) && (!f.event || m.event === f.event) &&
-      (!f.from || (m.played_at || "") >= f.from) && (!f.to || (m.played_at || "") <= f.to));
+    const ids = new Set(A.versions().map((v) => v.id));
+    return A.deckMatches().filter((m) => ids.has(m.decklist_id) && impactScope(m));
   }
-  function impactRows(zone, ms) {
+  // Match nello stesso ambito ma senza versione nota (non conteggiabili)
+  function impactUnknownCount() {
+    const ids = new Set(A.versions().map((v) => v.id));
+    return A.deckMatches().filter((m) => !ids.has(m.decklist_id) && impactScope(m)).length;
+  }
+
+  // <impact-pure> logica pura (testabile): nessun accesso al DOM
+  // Test esatto di Fisher a due code su [[a,b],[c,d]] (log-fattoriali).
+  function fisherP(a, b, c, d) {
+    const n1 = a + b, n2 = c + d, K = a + c, N = n1 + n2;
+    if (!n1 || !n2 || !K || K === N) return 1;
+    const lf = [0];
+    for (let i = 1; i <= N; i++) lf[i] = lf[i - 1] + Math.log(i);
+    const lp = (x) => lf[n1] - lf[x] - lf[n1 - x] + lf[n2] - lf[K - x] - lf[n2 - (K - x)] - (lf[N] - lf[K] - lf[N - K]);
+    const lo = Math.max(0, K - n2), hi = Math.min(n1, K), pObs = lp(a);
+    let p = 0;
+    for (let x = lo; x <= hi; x++) { const v = lp(x); if (v <= pObs + 1e-9) p += Math.exp(v); }
+    return Math.min(1, p);
+  }
+
+  // Cambiamenti tra versioni: vs = versioni (con match nell'ambito), byV = Map id versione -> match.
+  function buildChanges(vs, byV) {
+    const chrono = [...vs].sort((x, y) => (x.created_at || "").localeCompare(y.created_at || ""));
+    const newest = chrono[chrono.length - 1];
+    const allIds = chrono.map((v) => v.id);
+    const entries = [];
+    for (const zone of ["maindeck", "sideboard"]) {
+      const maps = new Map(chrono.map((v) => [v.id, A.listMap(A.parseList(v[zone]))]));
+      const names = new Map();
+      for (const v of chrono) for (const [k, c] of maps.get(v.id)) names.set(k, c.name); // vince la più recente
+      for (const [key, name] of names) {
+        const q = new Map(chrono.map((v) => [v.id, maps.get(v.id).has(key) ? maps.get(v.id).get(key).q : 0]));
+        const distinct = [...new Set(q.values())].sort((x, y) => x - y);
+        if (distinct.length < 2) continue;
+        const hi = distinct[distinct.length - 1];
+        const more = allIds.filter((id) => q.get(id) === hi);
+        const less = allIds.filter((id) => q.get(id) !== hi);
+        entries.push({ key, zone, name, q, hi, lows: distinct.slice(0, -1), more, less, buckets: distinct.map((c) => ({ q: c, ids: allIds.filter((id) => q.get(id) === c) })) });
+      }
+    }
+    // Una partizione delle versioni = un cambiamento. Il lato "con" è quello che contiene la versione più recente.
+    const groups = new Map();
+    for (const e of entries) {
+      const sides = [e.more, e.less];
+      const sig = sides.map((s) => s.join("|")).sort()[0]; // chiave simmetrica della partizione
+      const withIds = e.more.includes(newest.id) ? e.more : e.less;
+      const g = groups.get(sig) || { withIds, outIds: allIds.filter((id) => !withIds.includes(id)), items: [] };
+      const plus = withIds === e.more;
+      // conteggi sul lato "senza" (from) e sul lato "con" (to)
+      const to = plus ? [e.hi] : e.lows, from = plus ? e.lows : [e.hi];
+      g.items.push({ e, from, to, scalar: to.length === 1 && from.length === 1 });
+      groups.set(sig, g);
+    }
+    const changes = [];
+    for (const g of groups.values()) {
+      const msOf = (ids) => ids.flatMap((id) => byV.get(id) || []);
+      const sw = A.stats(msOf(g.withIds)), swo = A.stats(msOf(g.outIds));
+      const delta = sw.n && swo.n ? sw.wr - swo.wr : null;
+      const p = sw.n && swo.n ? fisherP(sw.W, sw.n - sw.W, swo.W, swo.n - swo.W) : 1;
+      const low = Math.min(sw.n, swo.n) < A.LOW_N;
+      const verdict = low ? "low" : p < 0.05 ? "net" : p < 0.2 ? "trend" : "none";
+      // Chip: coppie carta main<->side con stesso numero di copie diventano "dal side al main"
+      const chips = [], used = new Set();
+      const byKey = new Map();
+      for (const it of g.items) { if (!byKey.has(it.e.key)) byKey.set(it.e.key, []); byKey.get(it.e.key).push(it); }
+      for (const its of byKey.values()) {
+        const m = its.find((i) => i.e.zone === "maindeck" && i.scalar), s = its.find((i) => i.e.zone === "sideboard" && i.scalar);
+        if (m && s) {
+          const dm = m.to[0] - m.from[0], ds = s.to[0] - s.from[0];
+          if (dm === -ds && dm !== 0) { chips.push({ kind: "move", name: m.e.name, txt: dm > 0 ? "dal side al main" : "dal main al side", k: Math.abs(dm) }); used.add(m); used.add(s); }
+        }
+      }
+      for (const it of g.items) {
+        if (used.has(it)) continue;
+        const z = it.e.zone === "maindeck" ? "main" : "side";
+        if (!it.scalar) { chips.push({ kind: "count", name: it.e.name, z, txt: `${it.from.join("/")}→${it.to.join("/")}` }); continue; }
+        const f = it.from[0], t = it.to[0];
+        if (f === 0) chips.push({ kind: "in", name: it.e.name, z, k: t });
+        else if (t === 0) chips.push({ kind: "out", name: it.e.name, z, k: f });
+        else chips.push({ kind: "count", name: it.e.name, z, txt: `${f}→${t}` });
+      }
+      const rank = (c) => (c.kind === "in" ? 0 : c.kind === "out" ? 1 : 2);
+      chips.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+      const multi = new Set(g.items.map((i) => i.e.key)).size > 1;
+      const detail = g.items.filter((i) => i.e.buckets.length > 2).map((i) => ({ name: i.e.name, zone: i.e.zone, buckets: i.e.buckets.map((b) => ({ q: b.q, s: A.stats(msOf(b.ids)) })) }));
+      changes.push({ withIds: g.withIds, outIds: g.outIds, chips, multi, sw, swo, delta, p, verdict, detail, total: sw.n + swo.n });
+    }
+    const order = { net: 0, trend: 1, none: 2, low: 3 };
+    return changes.sort((a, b) => order[a.verdict] - order[b.verdict] || b.total - a.total);
+  }
+  // </impact-pure>
+
+  const fmtP = (p) => (p < 0.01 ? "< 0,01" : p.toFixed(2).replace(".", ","));
+  function verdictInfo(c) {
+    const ps = `(p = ${fmtP(c.p)})`;
+    const small = c.sw.n <= c.swo.n ? ["con", c.sw.n] : ["senza", c.swo.n];
+    if (c.verdict === "low") return { label: "Dati insufficienti", cls: "v-low", text: `Solo ${small[1]} match ${small[0]} il cambiamento: troppo pochi per dire qualcosa.` };
+    if (c.verdict === "net") return { label: "Differenza netta", cls: c.delta >= 0 ? "v-pos" : "v-neg", text: `Differenza difficile da spiegare con il caso ${ps}.` };
+    if (c.verdict === "trend") return { label: "Possibile tendenza", cls: c.delta >= 0 ? "v-pos-l" : "v-neg-l", text: `C'è un indizio, ma non abbastanza forte per fidarsi ${ps}: servono più match.` };
+    if (small[1] < 10) return { label: "Nessuna differenza visibile", cls: "v-none", text: `Solo ${small[1]} match ${small[0]} il cambiamento: una differenza così può uscire anche per caso ${ps}.` };
+    return { label: "Nessuna differenza visibile", cls: "v-none", text: `Le due percentuali sono compatibili tra loro ${ps}.` };
+  }
+
+  // Grafico a intervalli: punto = win rate, linea = IC 95% di Wilson
+  function intervalSvg(sw, swo) {
+    const X0 = 46, W = 206, x = (r) => (X0 + r * W).toFixed(1);
+    const row = (label, s, y, cls) => {
+      if (!s.n) return "";
+      const tip = `<b>${esc(label)}</b>` + A.ttRows([["Match", `${s.W} vinti su ${s.n}`], ["Win rate", pct(s.wr, 1)], ["IC 95%", `${pct(s.ci[0])}–${pct(s.ci[1])}`]]);
+      return `<g data-tip="${esc(tip)}"><rect x="0" y="${y - 9}" width="260" height="18" fill="transparent"/>
+        <text x="0" y="${y + 3}" class="ic-lab">${label}</text>
+        <line x1="${x(s.ci[0])}" x2="${x(s.ci[1])}" y1="${y}" y2="${y}" class="ic-line ${cls}"/>
+        <line x1="${x(s.ci[0])}" x2="${x(s.ci[0])}" y1="${y - 3}" y2="${y + 3}" class="ic-line ${cls}"/>
+        <line x1="${x(s.ci[1])}" x2="${x(s.ci[1])}" y1="${y - 3}" y2="${y + 3}" class="ic-line ${cls}"/>
+        <circle cx="${x(s.wr)}" cy="${y}" r="4.5" class="ic-dot ${cls}"/></g>`;
+    };
+    return `<svg class="ic-svg" viewBox="0 0 260 46" role="img" aria-label="Win rate con intervallo di confidenza, con e senza il cambiamento">
+      <line x1="${x(0.5)}" x2="${x(0.5)}" y1="2" y2="33" class="ic-ref"/>
+      <line x1="${x(0)}" x2="${x(1)}" y1="33" y2="33" class="ic-axis"/>
+      ${[0, 0.5, 1].map((t) => `<text x="${x(t)}" y="44" text-anchor="${t === 0 ? "start" : t === 1 ? "end" : "middle"}" class="ic-tick">${t * 100}%</text>`).join("")}
+      ${row("con", sw, 10, "c1")}${row("senza", swo, 25, "c2")}</svg>`;
+  }
+
+  function chipHTML(ch) {
+    const z = ch.z ? ` <small>(${ch.z})</small>` : "";
+    if (ch.kind === "in") return `<span class="sb-in" data-card="${esc(ch.name)}">+${ch.k} ${esc(ch.name)}${z}</span>`;
+    if (ch.kind === "out") return `<span class="sb-out" data-card="${esc(ch.name)}">${MINUS}${ch.k} ${esc(ch.name)}${z}</span>`;
+    if (ch.kind === "move") return `<span class="ic-neu" data-card="${esc(ch.name)}">${esc(ch.name)}${ch.k > 1 ? ` ×${ch.k}` : ""}: ${ch.txt}</span>`;
+    return `<span class="ic-neu" data-card="${esc(ch.name)}">${esc(ch.name)} ${esc(ch.txt)}${z}</span>`;
+  }
+
+  function changeHTML(c, vname) {
+    const names = (ids) => ids.map((id) => esc(vname.get(id))).join(", ");
+    const vi = verdictInfo(c), sw = c.sw, swo = c.swo;
+    const dpp = c.delta == null ? null : Math.round(c.delta * 100);
+    const diff = dpp == null ? "" : dpp === 0 ? ": stessa percentuale." : `: ${dpp > 0 ? "+" : MINUS}${Math.abs(dpp)} punti.`;
+    const sentence = `Con questo cambiamento avete vinto <b>${sw.W} match su ${sw.n}</b> (${pct(sw.wr)}); senza, <b>${swo.W} su ${swo.n}</b> (${pct(swo.wr)})${diff || "."}`;
+    return `<div class="ic-card ${vi.cls}">
+      <div class="sb-sum ic-chips">${c.chips.map(chipHTML).join("")}</div>
+      <div class="ic-vers small muted">Con, nelle versioni: ${names(c.withIds)}<br>Senza, nelle versioni: ${names(c.outIds)}</div>
+      <p class="ic-sentence">${sentence}</p>
+      <div class="ic-verdict"><span class="ic-badge">${vi.label}</span> <span class="small">${vi.text}</span></div>
+      ${intervalSvg(sw, swo)}
+      ${c.multi ? `<p class="small muted ic-note">Queste modifiche sono state fatte tutte insieme: non si può dire quale abbia contato.</p>` : ""}
+      ${c.detail.map((d) => `<div class="small muted ic-detail">${esc(d.name)} (${d.zone === "maindeck" ? "main" : "side"}) per numero di copie: ${d.buckets.map((b) => `×${b.q}: ${b.s.W}/${b.s.n}${b.s.n ? ` (${pct(b.s.wr)})` : ""}`).join(" · ")}</div>`).join("")}
+    </div>`;
+  }
+
+  function impactHTML() {
+    const ms = impactMatches(), unk = impactUnknownCount();
+    const f = S.filters, act = [f.player && `giocatore: ${f.player}`, f.event && `evento: ${f.event}`, f.from && `dal ${f.from}`, f.to && `al ${f.to}`].filter(Boolean);
     const byV = new Map();
     for (const m of ms) { if (!byV.has(m.decklist_id)) byV.set(m.decklist_id, []); byV.get(m.decklist_id).push(m); }
     const vs = A.versions().filter((v) => byV.has(v.id));
-    const maps = new Map(vs.map((v) => [v.id, A.listMap(A.parseList(v[zone]))]));
-    const keys = new Map();
-    for (const mp of maps.values()) for (const [k, c] of mp) if (!keys.has(k)) keys.set(k, c.name);
-    const rows = [];
-    for (const [k, name] of keys) {
-      const buckets = new Map();
-      for (const v of vs) {
-        const q = maps.get(v.id).has(k) ? maps.get(v.id).get(k).q : 0;
-        if (!buckets.has(q)) buckets.set(q, []);
-        buckets.get(q).push(...byV.get(v.id));
-      }
-      if (buckets.size < 2) continue;
-      const withL = [], withoutL = [];
-      for (const [q, l] of buckets) (q > 0 ? withL : withoutL).push(...l);
-      const sw = A.stats(withL), swo = A.stats(withoutL);
-      const delta = sw.n && swo.n ? sw.wr - swo.wr : null;
-      const ok = sw.n >= A.LOW_N && swo.n >= A.LOW_N;
-      rows.push({ name, ok, delta, sw, swo, buckets: [...buckets].sort((x, y) => x[0] - y[0]).map(([q, l]) => ({ q, s: A.stats(l) })) });
+    const vname = new Map(vs.map((v) => [v.id, v.name]));
+    const base = `${ms.length} match con una versione nota${unk ? ` (${unk} senza versione non ${unk === 1 ? "è conteggiato" : "sono conteggiati"})` : ""}${act.length ? ` · filtri attivi: ${esc(act.join(", "))}` : ""}`;
+    let body;
+    if (vs.length < 2) body = `<p class="muted">Servono match giocati con almeno due versioni diverse della lista${matchup ? ` contro ${esc(archName(matchup))}` : ""} per vedere cosa cambia. Per ora ce n'è ${vs.length}.</p>`;
+    else {
+      const changes = buildChanges(vs, byV);
+      body = changes.length ? changes.map((c) => changeHTML(c, vname)).join("")
+        : `<p class="muted">Le versioni con dei match hanno tutte le stesse carte (cambia solo il nome): non c'è nessun cambiamento da confrontare.</p>`;
     }
-    return rows.sort((a, b) => (b.ok - a.ok) || (Math.abs(b.delta ?? -1) - Math.abs(a.delta ?? -1)) || a.name.localeCompare(b.name));
-  }
-  function impactTable(zone, ms) {
-    const rows = impactRows(zone, ms);
-    if (!rows.length) return `<p class="muted small">Nessuna carta cambia numero di copie tra versioni che hanno dei match.</p>`;
-    return `<div class="table-wrap"><table class="heat"><thead><tr><th>Carta</th><th style="text-align:center">Con la carta</th><th style="text-align:center">Senza</th><th style="text-align:center">Δ</th><th>Per numero di copie</th></tr></thead><tbody>
-      ${rows.map((r) => `<tr class="${r.ok ? "" : "lowrow"}">
-        <th class="rowh" style="white-space:normal"><span data-card="${esc(r.name)}">${esc(r.name)}</span></th>
-        ${A.heatCell(r.sw.wr, r.sw.W, r.sw.n, `${r.name} · con`, A.record(r.sw), r.sw.n)}
-        ${A.heatCell(r.swo.wr, r.swo.W, r.swo.n, `${r.name} · senza`, A.record(r.swo), r.swo.n)}
-        ${r.delta == null ? `<td class="muted" style="text-align:center">—</td>` : `<td class="num" style="text-align:center;color:${r.delta >= 0 ? "var(--win)" : "var(--loss)"}">${r.delta >= 0 ? "+" : MINUS}${Math.abs(r.delta * 100).toFixed(0)} pp</td>`}
-        <td class="bk-cell">${r.buckets.map((b) => `<span class="bk${b.s.n < A.LOW_N ? " low" : ""}">×${b.q}: ${b.s.n} match · ${pct(b.s.wr)} <small>IC ${pct(b.s.ci[0])}–${pct(b.s.ci[1])}</small></span>`).join("")}</td>
-      </tr>`).join("")}</tbody></table></div>`;
-  }
-  function impactHTML() {
-    const ms = impactMatches();
-    const f = S.filters, act = [f.player && `giocatore: ${f.player}`, f.event && `evento: ${f.event}`, f.from && `dal ${f.from}`, f.to && `al ${f.to}`].filter(Boolean);
     return `<div class="card">
-      <div class="section-head"><h2>Impatto delle carte${scopeTitle()}</h2><span class="muted small">${ms.length} match con una versione nota${act.length ? ` · filtri attivi: ${esc(act.join(", "))}` : ""}</span></div>
-      ${A.versions().length < 2 ? `<p class="muted">Servono almeno due versioni con dei match per vedere cosa cambia carta per carta.</p>` : `
-      <p class="small muted" style="margin-top:0">Per ogni carta che cambia numero di copie tra le versioni giocate: win rate dei match con la carta (almeno una copia) contro quelli senza. Righe grigie = meno di ${A.LOW_N} match da un lato.</p>
-      <h3>Main deck</h3>${impactTable("maindeck", ms)}
-      <h3 style="margin-top:16px">Sideboard</h3>${impactTable("sideboard", ms)}
-      <p class="small muted" style="margin-bottom:0">⚠ Le carte cambiate insieme nella stessa versione sono confuse tra loro (non si capisce quale abbia fatto la differenza), e con pochi match le differenze sono in gran parte rumore: usa questi numeri come indizio, non come prova.</p>`}
+      <div class="section-head"><h2>Impatto delle carte${scopeTitle()}</h2><span class="muted small">${base}</span></div>
+      <details class="ic-how" open><summary>Come leggere</summary>
+        <p class="small">Ogni riquadro è <b>un cambiamento</b> fatto alla lista: le carte modificate insieme tra una versione e l'altra stanno nello stesso riquadro. <b>Con</b> sono i match giocati con le versioni che hanno il cambiamento, <b>senza</b> quelli giocati con le altre.</p>
+        <p class="small">La barra mostra, per ciascun lato, il <b>punto</b> (win rate osservato) e la <b>linea</b> (l'intervallo in cui il vero win rate si trova probabilmente). Se le due linee si sovrappongono, i due lati non sono distinguibili. Con pochi match la fortuna pesa più della lista: un 100% su 3 match non dimostra nulla.</p>
+      </details>
+      ${body}
     </div>`;
   }
 
