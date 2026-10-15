@@ -45,6 +45,20 @@
     return `<div class="sb-sum">${inn.map((c) => `<span class="sb-in">+${c.q} ${esc(c.name)}</span>`).join("")}${out.map((c) => `<span class="sb-out">−${c.q} ${esc(c.name)}</span>`).join("")}</div>`;
   }
 
+  // Sidate registrate nelle game post-board di questo matchup (dal form o dalle note)
+  function sidesHTML(ms) {
+    const rows = [];
+    for (const m of A.chrono(ms).reverse()) for (const g of A.gamesOf(m)) if (g.n >= 2 && g.sb) rows.push({ m, g });
+    const missing = ms.reduce((n, m) => n + A.gamesOf(m).filter((g) => g.n >= 2 && !g.sb).length, 0);
+    return `<div class="card"><div class="section-head"><h2>Sidate registrate</h2><a class="small" href="#sideboard/note">📝 Sidate dalle note →</a></div>
+      ${rows.length ? `<div class="table-wrap"><table class="sides-table"><thead><tr><th>Data</th><th>Giocatore</th><th>Game</th><th>Lato</th><th>Esito</th><th>Sidata</th></tr></thead><tbody>
+        ${rows.map(({ m, g }) => `<tr><td class="num">${A.fmtDate(m.played_at)}</td><td>${esc(m.player)}</td><td>G${g.n}</td>
+          <td>${g.play === true ? "play" : g.play === false ? "draw" : "—"}</td><td><span class="pill ${g.r}">${g.r === "W" ? "V" : g.r === "L" ? "P" : "="}</span></td>
+          <td style="white-space:normal">${A.sbSummaryHTML ? A.sbSummaryHTML(g.sb) : ""}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Nessuna sidata registrata per questo matchup.</p>`}
+      ${missing ? `<p class="small muted" style="margin-bottom:0">${missing} game post-board senza sidata: se l'avete scritta nelle note, recuperala da “Sidate dalle note”.</p>` : ""}
+    </div>`;
+  }
+
   function viewMatchupDetail(root, archId) {
     const a = A.archById(archId);
     if (!a) { root.innerHTML = `<p>Matchup non trovato. <a href="#matchup">Torna alla matrice</a></p>`; return; }
@@ -73,6 +87,7 @@
         </div>
         <div class="card"><h2>G1 → risultato</h2>${A.confusionG1(s)}</div>
       </div>
+      ${sidesHTML(ms)}
       <div class="card"><h2>Match</h2>${ms.length ? A.matchTable(A.chrono(ms).reverse()) : `<p class="muted">Nessun match.</p>`}</div>`;
     A.bindFilters(root, () => viewMatchupDetail(root, archId));
     A.bindMatchRows(root);

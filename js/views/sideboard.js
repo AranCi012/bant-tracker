@@ -409,7 +409,19 @@
     A.bindFilters(root, () => viewNotes(root));
     if (A.cards && A.cards.bindHover) A.cards.bindHover(root);
     const rowOf = (id) => all.find((r) => r.m.id === id);
-    const upd = async (m, patch) => { const u = await A.DB.update("matches", m.id, patch); S.matches = S.matches.map((x) => (x.id === m.id ? u : x)); };
+    // Salva la sidata sul match e, se la guida di quel matchup per quel lato (play/draw) è ancora vuota, la compila.
+    const filled = [];
+    const upd = async (m, patch) => {
+      const u = await A.DB.update("matches", m.id, patch); S.matches = S.matches.map((x) => (x.id === m.id ? u : x));
+      for (const g of A.gamesOf(u)) {
+        if (g.n < 2 || !g.sb || g.play == null) continue;
+        const side = g.play ? "play" : "draw", cur = A.guideFor(u.archetype_id);
+        if (cur && ((cur[side + "_in"] || "").trim() || (cur[side + "_out"] || "").trim())) continue;
+        await A.saveGuide(u.archetype_id, { [side + "_in"]: A.listToText(g.sb.in || []), [side + "_out"]: A.listToText(g.sb.out || []) });
+        const a = A.archById(u.archetype_id); filled.push(`${a ? a.name : "?"} (${side === "play" ? "on the play" : "on the draw"})`);
+      }
+    };
+    const guideMsg = () => (filled.length ? ` · guida compilata: ${filled.splice(0).join(", ")}` : "");
     const patchOf = (r) => { const p = {}; for (const g of r.targets) p["sb" + g.n] = r.prop["sb" + g.n]; return p; };
     // editor inline
     for (const id of Object.keys(ntState.editing)) {
@@ -424,7 +436,7 @@
     const $b = $("#nt-bulk", root);
     if ($b) $b.onclick = () => {
       if (!confirm(`Confermare ${high.length} match ad alta confidenza?`)) return;
-      A.guard(async () => { for (const r of high) await upd(r.m, patchOf(r)); A.toast(`${high.length} sidate salvate`); viewNotes(root); });
+      A.guard(async () => { for (const r of high) await upd(r.m, patchOf(r)); A.toast(`${high.length} sidate salvate${guideMsg()}`); viewNotes(root); });
     };
     root.onclick = (e) => {
       const b = e.target.closest("button[data-act]"); if (!b || b.disabled) return;
@@ -434,7 +446,7 @@
         if (!card) { A.toast("Scegli la carta"); return; }
         A.guard(async () => { await A.saveAliases({ ...A.aliases(), [b.dataset.w]: card }); A.toast(`“${b.dataset.w}” = ${card}`); viewNotes(root); });
       } else if (!r) return;
-      else if (act === "confirm") A.guard(async () => { await upd(r.m, patchOf(r)); A.toast("Sidata salvata"); viewNotes(root); });
+      else if (act === "confirm") A.guard(async () => { await upd(r.m, patchOf(r)); A.toast(`Sidata salvata${guideMsg()}`); viewNotes(root); });
       else if (act === "edit") {
         const ed = {};
         for (const g of r.post) ed["sb" + g.n] = r.prop["sb" + g.n] || (hasSb(g.sb) ? g.sb : { in: [], out: [] });
@@ -443,7 +455,7 @@
       else if (act === "save") A.guard(async () => {
         const ed = ntState.editing[id], p = {};
         for (const g of r.post) { const v = ed["sb" + g.n]; p["sb" + g.n] = v && (cleanList(v.in).length || cleanList(v.out).length) ? { in: cleanList(v.in), out: cleanList(v.out) } : null; }
-        await upd(r.m, p); delete ntState.editing[id]; A.toast("Sidata salvata"); viewNotes(root);
+        await upd(r.m, p); delete ntState.editing[id]; A.toast(`Sidata salvata${guideMsg()}`); viewNotes(root);
       });
       else if (act === "ignore") { A.lsSet("notesIgnored", [...ignoredIds(), id]); viewNotes(root); }
       else if (act === "unignore") { A.lsSet("notesIgnored", [...ignoredIds()].filter((x) => x !== id)); viewNotes(root); }
