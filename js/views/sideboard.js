@@ -162,6 +162,7 @@
           <button class="btn sm" id="sb-csv2">Esporta carte (.csv)</button>
           <button class="btn sm" id="sb-print">Stampa / PDF</button>
         </div></div>
+      ${A.notes ? `<div class="card nt-link no-print"><span>Le sidate si possono leggere dalle note dei match.</span><a class="btn primary" href="#sideboard/note">📝 Sidate dalle note (${reviewCount()} da rivedere)</a></div>` : ""}
       <div class="no-print">${A.filtersHTML()}</div>
       ${!rows.length ? `<div class="card empty-state"><p>Ancora nessuna guida né game post-board per questo mazzo.<br>Apri un matchup dalla <a href="#matchup">matrice</a> oppure scegli un archetipo qui sotto per scrivere la prima guida.</p>
         <div class="inline" style="justify-content:center;flex-wrap:wrap">${S.archetypes.slice(0, 12).map((a) => `<a class="btn sm" href="#sideboard/${encodeURIComponent(a.id)}">${esc(a.name)}</a>`).join("")}</div></div>` : `
@@ -308,5 +309,146 @@
     if (A.cards && A.cards.bindHover) A.cards.bindHover(el);
   }
 
-  A.views.sideboard = (root, archId) => (archId ? viewDetail(root, archId) : viewOverview(root));
+  // ---------------------------------------------------------------------
+  //  Vista: sidate dalle note (#sideboard/note)
+  // ---------------------------------------------------------------------
+  const ntState = { showAll: false, showIgn: false, editing: {} };
+  const hasSb = (sb) => !!sb && (cleanList(sb.in).length > 0 || cleanList(sb.out).length > 0);
+  const ignoredIds = () => new Set(A.lsGet("notesIgnored", []));
+
+  // Una riga per match con note e game post-board; targets = game per cui c'è una proposta da rivedere
+  function noteRows(ms, showAll) {
+    const ign = ignoredIds(), ver0 = A.activeVersion(), alias = A.aliases(), rows = [];
+    for (const m of ms) {
+      if (!(m.notes || "").trim()) continue;
+      const post = A.gamesOf(m).filter((g) => g.n >= 2);
+      if (!post.length) continue;
+      if (!showAll && post.every((g) => hasSb(g.sb))) continue;
+      const ver = A.versionById(m.decklist_id) || ver0;
+      const res = A.notes.parse(m.notes, { version: ver, aliases: alias });
+      const prop = A.notes.forMatch(m, res);
+      const targets = post.filter((g) => prop["sb" + g.n] && (showAll || !hasSb(g.sb)));
+      rows.push({ m, ver, res, prop, post, targets, ignored: ign.has(m.id) });
+    }
+    return rows.sort((a, b) => (b.m.played_at || "").localeCompare(a.m.played_at || ""));
+  }
+  const reviewCount = () => noteRows(A.filtered(), false).filter((r) => !r.ignored && r.targets.length).length;
+
+  // Testo della nota con le parti interpretate evidenziate (tutto escapato)
+  function highlight(text, res) {
+    const rs = [...res.evidence.map((e) => ({ s: e.start, e: e.end, c: "ev-" + e.dir })),
+      ...res.ignored.filter((x) => x.reason !== "punteggio").map((x) => ({ s: x.start, e: x.end, c: "ev-ign" }))]
+      .filter((r) => r.s != null).sort((a, b) => a.s - b.s);
+    let pos = 0, h = "";
+    for (const r of rs) {
+      if (r.s < pos) continue;
+      h += esc(text.slice(pos, r.s)) + `<mark class="${r.c}">${esc(text.slice(r.s, r.e))}</mark>`;
+      pos = r.e;
+    }
+    return h + esc(text.slice(pos));
+  }
+  const confClass = (c) => `<span class="np-conf c-${esc(c)}">confidenza ${esc(c)}</span>`;
+  // Nomi unici per carta (stessa carta scritta con maiuscole diverse = una sola voce)
+  const cardNames = () => [...A.listMap(A.versions().flatMap((v) => [...A.parseList(v.maindeck), ...A.parseList(v.sideboard)])).values()].map((c) => c.name).sort((a, b) => a.localeCompare(b));
+
+  function noteRowHTML(r) {
+    const { m, res } = r, arch = A.archById(m.archetype_id), all = A.gamesOf(m);
+    const editing = ntState.editing[m.id];
+    const pills = all.map((g) => `<span class="pill ${g.r}">G${g.n} ${g.r === "W" ? "V" : g.r === "L" ? "P" : "="}${g.play === true ? " play" : g.play === false ? " draw" : ""}</span>`).join(" ");
+    const games = r.post.map((g) => {
+      const p = r.prop["sb" + g.n], rec = hasSb(g.sb);
+      return `<div class="np-g"><b>G${g.n}</b>${rec ? `<span class="muted small">registrata:</span>${A.sbSummaryHTML(g.sb)}` : ""}${p ? `${rec ? `<span class="muted small">→ proposta:</span>` : ""}${A.sbSummaryHTML(p)}` : (rec ? "" : `<span class="muted small">nessuna proposta</span>`)}</div>`;
+    }).join("");
+    let body;
+    if (editing) {
+      body = `<div class="nt-edit">${r.post.map((g) => `<h4>G${g.n}</h4><div data-ed="${m.id ? esc(m.id) : ""}" data-n="${g.n}"></div>`).join("")}</div>
+        <div class="nt-actions"><button class="btn primary" data-act="save" data-id="${esc(m.id)}">Salva</button><button class="btn" data-act="cancel" data-id="${esc(m.id)}">Annulla</button></div>`;
+    } else {
+      const overwrite = r.targets.some((g) => hasSb(g.sb));
+      body = `<div class="nt-games">${games}</div>
+        ${r.res.warnings.length ? `<div class="warn">${r.res.warnings.map(esc).join("<br>")}</div>` : ""}
+        <div class="nt-actions">
+          ${r.targets.length ? `<button class="btn primary" data-act="confirm" data-id="${esc(m.id)}">${overwrite ? "Conferma (sovrascrive)" : "Conferma"}</button>` : ""}
+          <button class="btn" data-act="edit" data-id="${esc(m.id)}">Modifica</button>
+          <button class="btn" data-act="${r.ignored ? "unignore" : "ignore"}" data-id="${esc(m.id)}">${r.ignored ? "Ripristina" : "Ignora"}</button>
+        </div>`;
+    }
+    return `<div class="card nt-item">
+      <div class="nt-head"><b>${esc(A.fmtDate(m.played_at))}</b><span>${esc(m.player)}</span><span class="muted">vs ${esc(arch ? arch.name : "?")}${m.opponent ? ` (${esc(m.opponent)})` : ""}</span>${pills}${confClass(res.confidence)}</div>
+      <div class="nt-note">${highlight(m.notes, res)}</div>
+      ${body}</div>`;
+  }
+
+  function viewNotes(root) {
+    const deck = A.currentDeck();
+    const all = noteRows(A.filtered(), ntState.showAll);
+    const ign = all.filter((r) => r.ignored), act = all.filter((r) => !r.ignored);
+    const review = act.filter((r) => r.targets.length), none = act.filter((r) => !r.targets.length);
+    const high = review.filter((r) => r.res.confidence === "alta" && !ntState.editing[r.m.id]);
+    // parole non riconosciute, aggregate
+    const unk = new Map();
+    for (const r of act) for (const w of r.res.unknown) unk.set(w, (unk.get(w) || 0) + 1);
+    const names = cardNames();
+    root.innerHTML = `
+      <div class="page-head"><div><a class="small" href="#sideboard">← Tutte le guide</a><h1 style="margin-top:4px">Sidate dalle note <span class="muted" style="font-weight:500">· ${esc(deck.name)}</span></h1></div></div>
+      <div class="no-print">${A.filtersHTML()}</div>
+      <div class="nt-bar">
+        <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="nt-all"${ntState.showAll ? " checked" : ""}> mostra anche già registrate</label>
+        ${high.length ? `<button class="btn primary" id="nt-bulk">Conferma tutte quelle ad alta confidenza (${high.length})</button>` : ""}
+        ${ign.length ? `<button class="btn sm" id="nt-ign">${ntState.showIgn ? "Nascondi" : "Mostra"} ignorate (${ign.length})</button>` : ""}
+      </div>
+      ${unk.size ? `<div class="card"><h3 style="margin-top:0">Parole non riconosciute</h3>
+        <p class="muted small">Insegna un soprannome: tutte le note vengono rilette.</p>
+        <div class="np-teach">${[...unk].map(([w, n]) => `<span class="np-unk"><b>${esc(w)}</b><span class="muted small">(${n})</span> →
+          <select><option value="">— carta —</option>${names.map((c) => `<option>${esc(c)}</option>`).join("")}</select>
+          <button class="btn sm" data-act="teach" data-w="${esc(w)}">Insegna soprannome</button></span>`).join("")}</div></div>` : ""}
+      ${!review.length && !none.length ? `<div class="card empty-state"><p>Niente da rivedere: nessun match con note e game post-board senza sidata registrata${ign.length ? " (ci sono note ignorate)" : ""}.</p></div>` : ""}
+      ${review.map(noteRowHTML).join("")}
+      ${none.length ? `<details style="margin-top:16px"><summary class="muted">Senza sidata riconosciuta (${none.length})</summary><div style="margin-top:8px">${none.map(noteRowHTML).join("")}</div></details>` : ""}
+      ${ntState.showIgn ? ign.map(noteRowHTML).join("") : ""}`;
+    A.bindFilters(root, () => viewNotes(root));
+    if (A.cards && A.cards.bindHover) A.cards.bindHover(root);
+    const rowOf = (id) => all.find((r) => r.m.id === id);
+    const upd = async (m, patch) => { const u = await A.DB.update("matches", m.id, patch); S.matches = S.matches.map((x) => (x.id === m.id ? u : x)); };
+    const patchOf = (r) => { const p = {}; for (const g of r.targets) p["sb" + g.n] = r.prop["sb" + g.n]; return p; };
+    // editor inline
+    for (const id of Object.keys(ntState.editing)) {
+      const r = rowOf(id); if (!r) continue;
+      for (const host of root.querySelectorAll(`[data-ed="${CSS.escape(id)}"]`)) {
+        const n = host.dataset.n, ed = ntState.editing[id];
+        A.sbEditor(host, { version: () => r.ver, value: ed["sb" + n] || { in: [], out: [] }, onChange(v) { ed["sb" + n] = v; } });
+      }
+    }
+    const $a = $("#nt-all", root); if ($a) $a.onchange = () => { ntState.showAll = $a.checked; viewNotes(root); };
+    const $i = $("#nt-ign", root); if ($i) $i.onclick = () => { ntState.showIgn = !ntState.showIgn; viewNotes(root); };
+    const $b = $("#nt-bulk", root);
+    if ($b) $b.onclick = () => {
+      if (!confirm(`Confermare ${high.length} match ad alta confidenza?`)) return;
+      A.guard(async () => { for (const r of high) await upd(r.m, patchOf(r)); A.toast(`${high.length} sidate salvate`); viewNotes(root); });
+    };
+    root.onclick = (e) => {
+      const b = e.target.closest("button[data-act]"); if (!b || b.disabled) return;
+      const act = b.dataset.act, id = b.dataset.id, r = id ? rowOf(id) : null;
+      if (act === "teach") {
+        const card = (b.closest(".np-unk").querySelector("select").value || "").trim();
+        if (!card) { A.toast("Scegli la carta"); return; }
+        A.guard(async () => { await A.saveAliases({ ...A.aliases(), [b.dataset.w]: card }); A.toast(`“${b.dataset.w}” = ${card}`); viewNotes(root); });
+      } else if (!r) return;
+      else if (act === "confirm") A.guard(async () => { await upd(r.m, patchOf(r)); A.toast("Sidata salvata"); viewNotes(root); });
+      else if (act === "edit") {
+        const ed = {};
+        for (const g of r.post) ed["sb" + g.n] = r.prop["sb" + g.n] || (hasSb(g.sb) ? g.sb : { in: [], out: [] });
+        ntState.editing[id] = ed; viewNotes(root);
+      } else if (act === "cancel") { delete ntState.editing[id]; viewNotes(root); }
+      else if (act === "save") A.guard(async () => {
+        const ed = ntState.editing[id], p = {};
+        for (const g of r.post) { const v = ed["sb" + g.n]; p["sb" + g.n] = v && (cleanList(v.in).length || cleanList(v.out).length) ? { in: cleanList(v.in), out: cleanList(v.out) } : null; }
+        await upd(r.m, p); delete ntState.editing[id]; A.toast("Sidata salvata"); viewNotes(root);
+      });
+      else if (act === "ignore") { A.lsSet("notesIgnored", [...ignoredIds(), id]); viewNotes(root); }
+      else if (act === "unignore") { A.lsSet("notesIgnored", [...ignoredIds()].filter((x) => x !== id)); viewNotes(root); }
+    };
+  }
+
+  A.views.sideboard = (root, arg) => (arg === "note" ? viewNotes(root) : arg ? viewDetail(root, arg) : viewOverview(root));
 })();

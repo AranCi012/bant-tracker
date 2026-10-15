@@ -10,6 +10,35 @@
 
   let viewMode = "list"; // "list" | "img"
   const cmp = { a: "", b: "" }; // versioni confrontate
+  let matchup = ""; // id archetipo avversario; "" = tutti i matchup
+  let matchupLoaded = false;
+
+  // Stile del solo selettore matchup e della tabella per matchup (variabili del tema)
+  const CSS = `
+.matchup-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; }
+.matchup-bar select { min-width: 260px; max-width: 100%; }
+.mu-pick { all: unset; cursor: pointer; color: var(--accent); font-weight: 600; text-decoration: underline dotted; text-underline-offset: 3px; }
+.mu-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.heat tr.mu-low { opacity: .55; }
+@media (max-width: 640px) {
+  .matchup-bar { flex-direction: column; align-items: stretch; }
+  .matchup-bar select { width: 100%; min-width: 0; }
+}`;
+  function injectCss() {
+    if (document.getElementById("deck-style")) return;
+    const s = document.createElement("style");
+    s.id = "deck-style";
+    s.textContent = CSS;
+    document.head.appendChild(s);
+  }
+  injectCss();
+
+  const archName = (id) => (A.archById(id) || {}).name || "";
+  const scopeTitle = () => (matchup ? ` · vs ${esc(archName(matchup))}` : "");
+  const inScope = (m) => !matchup || m.archetype_id === matchup;
+  const vMatchesAll = (v) => A.deckMatches().filter((m) => m.decklist_id === v.id);
+  const vMatches = (v) => vMatchesAll(v).filter(inScope); // match della versione, nel matchup selezionato
+  const setMatchup = (id, root) => { matchup = id || ""; A.lsSet("deckMatchup", matchup); viewDeck(root); };
 
   function cardListHTML(cards) {
     return `<ul class="cardlist">${cards.map((c) => `<li><span class="q">${c.q}</span><a href="${esc(scryPage(c.name))}" target="_blank" rel="noopener" data-card="${esc(c.name)}">${esc(c.name)}</a></li>`).join("")}</ul>`;
@@ -18,7 +47,6 @@
   // ---- Confronto fra liste (per carta, con cardKey) ---------------------
   const chronoVersions = () => [...A.versions()].sort((x, y) => (x.created_at || "").localeCompare(y.created_at || ""));
   const prevOf = (v) => { const c = chronoVersions(); const i = c.findIndex((x) => x.id === v.id); return i > 0 ? c[i - 1] : null; };
-  const vMatches = (v) => A.deckMatches().filter((m) => m.decklist_id === v.id);
 
   function diffZone(oldText, newText) {
     const o = A.listMap(A.parseList(oldText)), n = A.listMap(A.parseList(newText));
@@ -40,7 +68,31 @@
     ? `<b>${pct(s.wr)}</b> match WR · ${A.record(s)} · game ${pct(s.gwr)} · n=${s.n} · IC ${pct(s.ci[0])}–${pct(s.ci[1])}${s.n < A.LOW_N ? ` <span class="warn">⚠ campione piccolo</span>` : ""}`
     : `<span class="muted">Nessun match con questa versione</span>`);
 
+  // Differenza in punti percentuali (B−A) con colore; "—" se manca un lato
+  const deltaCell = (x, y) => (x == null || y == null ? `<td class="muted" style="text-align:center">—</td>` : (() => { const d = (y - x) * 100; return `<td class="num" style="text-align:center;color:${d >= 0 ? "var(--win)" : "var(--loss)"}">${d >= 0 ? "+" : MINUS}${Math.abs(d).toFixed(0)} pp</td>`; })());
+
   // ---- Confronta versioni ------------------------------------------------
+  // Tabella per matchup: una riga per avversario con match in A o B (tutti i matchup, non filtrati)
+  function matchupCompareHTML(a, b) {
+    const mA = vMatchesAll(a), mB = vMatchesAll(b);
+    const rows = A.byArchetype([...mA, ...mB]);
+    if (!rows.length) return `<p class="muted small">Nessun match con queste due versioni.</p>`;
+    const sub = (ms, id) => A.stats(ms.filter((m) => m.archetype_id === id));
+    const body = rows.map(({ id, arch }) => {
+      const sa = sub(mA, id), sb = sub(mB, id);
+      const low = sa.n < A.LOW_N || sb.n < A.LOW_N;
+      return `<tr class="${low ? "mu-low" : ""}">
+        <th class="rowh" style="white-space:normal"><button type="button" class="mu-pick" data-mu="${esc(id)}" title="Mostra solo questo matchup">${esc(arch.name)}</button></th>
+        ${A.heatCell(sa.wr, sa.W, sa.n, `${a.name} vs ${arch.name} · Match WR`, A.record(sa), sa.n)}
+        ${A.heatCell(sb.wr, sb.W, sb.n, `${b.name} vs ${arch.name} · Match WR`, A.record(sb), sb.n)}
+        ${deltaCell(sa.wr, sb.wr)}
+        <td class="num" style="text-align:center">${sa.n}</td><td class="num" style="text-align:center">${sb.n}</td>
+      </tr>`;
+    }).join("");
+    return `<p class="small muted" style="margin-top:0">Solo match contro ciascun avversario, ordinati per match totali. Clicca il nome per vedere quel matchup.</p>
+      <div class="table-wrap"><table class="heat"><thead><tr><th>Matchup</th><th style="text-align:center">${esc(a.name)}</th><th style="text-align:center">${esc(b.name)}</th><th style="text-align:center">Δ B−A</th><th style="text-align:center">n A</th><th style="text-align:center">n B</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  }
+
   function compareHTML() {
     const vs = chronoVersions();
     if (vs.length < 2) return `<div class="card"><h2>Confronta versioni</h2><p class="muted">Servono almeno due versioni della lista per confrontarle.</p></div>`;
@@ -49,20 +101,23 @@
     const sa = A.stats(vMatches(a)), sb = A.stats(vMatches(b));
     const opt = (sel) => vs.map((v) => `<option value="${esc(v.id)}"${v.id === sel ? " selected" : ""}>${esc(v.name)}</option>`).join("");
     const metrics = [["Match WR", "wr", "W", "n"], ["Game WR", "gwr", "gW", "gN"], ["Pre-board (G1)", "pre", "preW", "preN"], ["Post-board (G2-3)", "post", "postW", "postN"], ["On the play", "play", "playW", "playN"], ["On the draw", "draw", "drawW", "drawN"]];
-    const delta = (x, y) => (x == null || y == null ? `<td class="muted" style="text-align:center">—</td>` : (() => { const d = (y - x) * 100; return `<td class="num" style="text-align:center;color:${d >= 0 ? "var(--win)" : "var(--loss)"}">${d >= 0 ? "+" : MINUS}${Math.abs(d).toFixed(0)} pp</td>`; })());
     const small = sa.n < A.LOW_N || sb.n < A.LOW_N;
+    const tot = sa.n + sb.n;
     return `<div class="card">
-      <div class="section-head"><h2>Confronta versioni</h2><span class="muted small">Le percentuali contano match o game a seconda della riga</span></div>
+      <div class="section-head"><h2>Confronta versioni${scopeTitle()}</h2><span class="muted small">Le percentuali contano match o game a seconda della riga</span></div>
       <div class="cmp-pick">
         <label class="field">A <select id="cmp-a">${opt(a.id)}</select></label>
         <span class="muted">→</span>
         <label class="field">B <select id="cmp-b">${opt(b.id)}</select></label>
       </div>
       ${small ? `<p class="small warn" style="margin:8px 0">⚠ Almeno una delle due versioni ha meno di ${A.LOW_N} match: il confronto è molto incerto.</p>` : ""}
+      ${matchup && tot === 0 ? `<p class="small muted" style="margin:8px 0">Nessun match contro ${esc(archName(matchup))} con queste due versioni: scegline altre qui sotto.</p>` : ""}
+      ${matchup && tot > 0 && tot < 6 ? `<p class="small warn" style="margin:8px 0">⚠ Solo ${tot} match contro ${esc(archName(matchup))} tra A e B: i numeri per matchup sono molto rumorosi, non trarne conclusioni.</p>` : ""}
       <div class="table-wrap"><table class="heat"><thead><tr><th></th><th style="text-align:center">${esc(a.name)}</th><th style="text-align:center">${esc(b.name)}</th><th style="text-align:center">Δ B−A</th></tr></thead><tbody>
-        ${metrics.map(([label, f, k, n]) => `<tr><th class="rowh">${label}</th>${A.heatCell(sa[f], sa[k], sa[n], `${a.name} · ${label}`, f === "wr" ? A.record(sa) : null, sa.n)}${A.heatCell(sb[f], sb[k], sb[n], `${b.name} · ${label}`, f === "wr" ? A.record(sb) : null, sb.n)}${delta(sa[f], sb[f])}</tr>`).join("")}
+        ${metrics.map(([label, f, k, n]) => `<tr><th class="rowh">${label}</th>${A.heatCell(sa[f], sa[k], sa[n], `${a.name} · ${label}`, f === "wr" ? A.record(sa) : null, sa.n)}${A.heatCell(sb[f], sb[k], sb[n], `${b.name} · ${label}`, f === "wr" ? A.record(sb) : null, sb.n)}${deltaCell(sa[f], sb[f])}</tr>`).join("")}
         <tr><th class="rowh">Match giocati</th><td class="num" style="text-align:center">${sa.n}</td><td class="num" style="text-align:center">${sb.n}</td><td></td></tr>
       </tbody></table></div>
+      ${matchup ? "" : `<h3>Per matchup</h3>${matchupCompareHTML(a, b)}`}
       <h3>Differenze di carte (A → B)</h3>
       ${a.id === b.id ? `<span class="muted small">Hai scelto la stessa versione.</span>` : `<div class="diff">${diffHTML(a, b)}</div>`}
     </div>`;
@@ -72,7 +127,7 @@
   // Match del mazzo con una versione esistente; filtri giocatore/evento/data della barra, IGNORANDO il filtro versione.
   function impactMatches() {
     const f = S.filters, ids = new Set(A.versions().map((v) => v.id));
-    return A.deckMatches().filter((m) => ids.has(m.decklist_id) &&
+    return A.deckMatches().filter((m) => ids.has(m.decklist_id) && inScope(m) &&
       (!f.player || m.player === f.player) && (!f.event || m.event === f.event) &&
       (!f.from || (m.played_at || "") >= f.from) && (!f.to || (m.played_at || "") <= f.to));
   }
@@ -117,7 +172,7 @@
     const ms = impactMatches();
     const f = S.filters, act = [f.player && `giocatore: ${f.player}`, f.event && `evento: ${f.event}`, f.from && `dal ${f.from}`, f.to && `al ${f.to}`].filter(Boolean);
     return `<div class="card">
-      <div class="section-head"><h2>Impatto delle carte</h2><span class="muted small">${ms.length} match con una versione nota${act.length ? ` · filtri attivi: ${esc(act.join(", "))}` : ""}</span></div>
+      <div class="section-head"><h2>Impatto delle carte${scopeTitle()}</h2><span class="muted small">${ms.length} match con una versione nota${act.length ? ` · filtri attivi: ${esc(act.join(", "))}` : ""}</span></div>
       ${A.versions().length < 2 ? `<p class="muted">Servono almeno due versioni con dei match per vedere cosa cambia carta per carta.</p>` : `
       <p class="small muted" style="margin-top:0">Per ogni carta che cambia numero di copie tra le versioni giocate: win rate dei match con la carta (almeno una copia) contro quelli senza. Righe grigie = meno di ${A.LOW_N} match da un lato.</p>
       <h3>Main deck</h3>${impactTable("maindeck", ms)}
@@ -147,6 +202,10 @@
     }
     const sel = (A.versions().find((v) => v.id === S.deckSel)) || A.activeVersion();
     S.deckSel = sel.id;
+    // Matchup scelto: ricordato, ma se per il mazzo corrente non ci sono match contro quell'avversario torna a "Tutti"
+    if (!matchupLoaded) { matchup = A.lsGet("deckMatchup", "") || ""; matchupLoaded = true; }
+    const muOpts = A.byArchetype(A.deckMatches());
+    if (matchup && !muOpts.some((o) => o.id === matchup)) { matchup = ""; A.lsSet("deckMatchup", ""); }
     const main = A.parseList(sel.maindeck), side = A.parseList(sel.sideboard);
     const nm = A.countList(main), ns = A.countList(side);
     const ds = A.stats(vMatches(sel));
@@ -155,6 +214,10 @@
     root.innerHTML = `
       <div class="page-head"><h1>La nostra lista <span class="muted" style="font-weight:500">· ${esc(A.currentDeck().name)}</span></h1>
         <div class="inline"><button class="btn" id="new-deck">+ Nuova versione</button></div></div>
+      <div class="matchup-bar"><label for="matchup-sel"><b>Matchup</b></label>
+        <select id="matchup-sel"><option value="">Tutti i matchup</option>${muOpts.map((o) => `<option value="${esc(o.id)}"${o.id === matchup ? " selected" : ""}>${esc(o.arch.name)} (${o.s.n})</option>`).join("")}</select>
+        ${matchup ? `<span class="small muted">Tutte le statistiche qui sotto sono solo per questo matchup</span>` : ""}
+      </div>
       <div class="deck-cols">
         <div class="card">
           <div class="section-head">
@@ -180,7 +243,7 @@
           <p class="muted small">Passa il mouse su una carta per vederla, clicca per aprirla su Scryfall.</p>
         </div>
         <div class="card">
-          <h2>Versioni</h2>
+          <h2>Versioni${scopeTitle()}</h2>
           <p class="muted small" style="margin-top:0">Ogni match è collegato alla versione usata. Sotto ogni versione trovi le carte cambiate rispetto alla precedente.</p>
           <ul class="versions">${A.versions().map((d) => { const s = A.stats(vMatches(d)); return `
             <li class="version vx${d.id === sel.id ? " sel" : ""}" data-deck="${esc(d.id)}">
@@ -198,6 +261,9 @@
     $("#dup-deck", root).onclick = () => editDeck({ ...sel, id: null, name: sel.name + " (nuova)", is_active: false });
     $("#copy-deck", root).onclick = () => copyDeck(sel);
     $$("#mode-seg button", root).forEach((b) => (b.onclick = () => { viewMode = b.dataset.mode; viewDeck(root); }));
+    const mSel = $("#matchup-sel", root);
+    mSel.onchange = () => setMatchup(mSel.value, root);
+    $$("[data-mu]", root).forEach((b) => (b.onclick = () => setMatchup(b.dataset.mu, root)));
     const ca = $("#cmp-a", root), cb = $("#cmp-b", root);
     if (ca) { ca.onchange = () => { cmp.a = ca.value; viewDeck(root); }; cb.onchange = () => { cmp.b = cb.value; viewDeck(root); }; }
     const sa = $("#set-active", root);

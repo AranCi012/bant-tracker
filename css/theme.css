@@ -156,3 +156,4 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
   .kpi .value { font-size: 1.6rem; }
 }
 .kpis > .card + .card { margin-top: 0; }
+.notes-ta { font-family: inherit; font-size: inherit; min-height: 60px; }

@@ -59,3 +59,36 @@ td.lowrow { opacity: .8; }
   .sbe-step button, .sbe-add { display: none !important; }
   a { color: inherit; text-decoration: none; }
 }
+
+/* ---------- Sidate dalle note ---------- */
+.notes-panel { border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.np-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; font-size: .9rem; }
+.np-conf { font-size: .75rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text-2); }
+.np-conf.c-alta { background: color-mix(in srgb, var(--win) 18%, transparent); color: var(--win); }
+.np-conf.c-bassa { background: color-mix(in srgb, var(--loss) 15%, transparent); color: var(--loss); }
+.np-lines { display: flex; flex-direction: column; gap: 4px; }
+.np-g { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.np-teach { display: flex; flex-direction: column; gap: 6px; }
+.np-unk { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.np-unk select, .np-unk input { min-width: 0; max-width: 100%; flex: 1 1 140px; }
+.np-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.np-actions:empty { display: none; }
+.nb-badge { font-size: .7rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+
+/* evidenziazione nelle note */
+mark.ev-in, mark.ev-out, mark.ev-keep, mark.ev-ign { border-radius: 4px; padding: 0 2px; color: inherit; }
+mark.ev-in { background: color-mix(in srgb, var(--win) 25%, transparent); }
+mark.ev-out { background: color-mix(in srgb, var(--loss) 22%, transparent); }
+mark.ev-keep { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+mark.ev-ign { background: transparent; text-decoration: line-through; opacity: .6; }
+
+/* ---------- Vista #sideboard/note ---------- */
+.nt-link { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.nt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+.nt-item { display: flex; flex-direction: column; gap: 8px; }
+.nt-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.nt-note { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
+.nt-games { display: flex; flex-direction: column; gap: 6px; }
+.nt-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.nt-actions .btn { min-height: 40px; }
+.nt-edit h4 { margin: 8px 0 4px; }

@@ -36,7 +36,8 @@
           <select name="decklist_id"><option value="">—</option>${A.versions().map((d) => `<option value="${esc(d.id)}"${d.id === deckSel ? " selected" : ""}>${esc(d.name)}${d.is_active ? " (attiva)" : ""}</option>`).join("")}</select>
         </label>
         <label class="field">Nome avversario <span class="muted" style="font-weight:400">(opzionale)</span><input name="opponent" value="${esc(m.opponent || "")}" placeholder="nick MTGO, nome…"></label>
-        <label class="field">Note <span class="muted" style="font-weight:400">(opzionale)</span><input name="notes" value="${esc(m.notes || "")}" placeholder="mulligan, carte chiave, errori…"></label>
+        <label class="field full">Note <span class="muted" style="font-weight:400">(opzionale — se scrivi la sidata, es. “side otd: +2 priest −2 stifle”, la leggo da sola)</span><textarea name="notes" rows="2" class="notes-ta" placeholder="mulligan, carte chiave, errori, sidata…">${esc(m.notes || "")}</textarea></label>
+        <div class="field full" id="notes-panel"></div>
       </div>
       <div class="row-actions" style="justify-content:space-between;align-items:center">
         <span class="result-preview" id="res-prev"></span>
@@ -155,19 +156,86 @@
     // Regola: chi perde la game precedente sceglie e va on the play; dopo un pareggio sceglie di nuovo lo stesso giocatore.
     const nextPlay = (prev) => (prev.r === "L" ? true : prev.r === "W" ? false : prev.p);
     // Sideboarding di G2/G3 (indici 1 e 2). manual = modificato a mano: la guida non lo sovrascrive.
-    const mkSb = (sb) => ({ in: cleanList(sb && sb.in), out: cleanList(sb && sb.out), manual: !!m.id, orig: !!sb, open: false });
+    // touched = modificato a mano in questa sessione; notes = valori arrivati dall'interprete delle note ("dalle note")
+    const mkSb = (sb) => ({ in: cleanList(sb && sb.in), out: cleanList(sb && sb.out), manual: !!m.id, orig: !!sb, open: false, touched: false, notes: false });
     const SB = [null, mkSb(m.sb2), mkSb(m.sb3)];
     function applyGuide() {
       for (let i = 1; i < 3; i++) {
-        if (SB[i].manual) continue;
+        if (SB[i].manual || SB[i].notes) continue;
         const g = guideSb(form.archetype_id.value, G[i].p);
         SB[i].in = g.in; SB[i].out = g.out;
       }
     }
+    // ---- Sidate dalle note ------------------------------------------------
+    const NP = { res: null, prop: {}, undo: {}, suppress: null };
+    const fakeMatch = () => ({ g1: G[0].r, p1: G[0].p, g2: G[1].r, p2: G[1].p, g3: G[2].r, p3: G[2].p });
+    const sbKey = (v) => JSON.stringify([cleanList(v.in).map((c) => [c.q, c.name]), cleanList(v.out).map((c) => [c.q, c.name])]);
+    const confOk = () => !!NP.res && (NP.res.confidence === "alta" || NP.res.confidence === "media");
+    function putNotes(i, p) {
+      const s = SB[i];
+      if (!NP.undo[i]) NP.undo[i] = { in: s.in, out: s.out };
+      s.in = cleanList(p.in); s.out = cleanList(p.out); s.notes = true;
+    }
+    function dropNotes(i) {
+      const s = SB[i], u = NP.undo[i];
+      s.notes = false; delete NP.undo[i];
+      if (s.manual) { s.in = u ? u.in : []; s.out = u ? u.out : []; }
+    }
+    function notesSync() {
+      const text = form.notes.value.trim();
+      const ver = A.versionById(form.decklist_id.value);
+      NP.res = text && A.notes ? A.notes.parse(text, { version: ver, aliases: A.aliases() }) : null;
+      NP.prop = NP.res ? A.notes.forMatch(fakeMatch(), NP.res) : {};
+      const auto = confOk() && NP.suppress !== text;
+      for (const i of [1, 2]) {
+        const p = NP.prop["sb" + (i + 1)], s = SB[i];
+        if (s.notes) { if (G[i].r && p && auto) putNotes(i, p); else dropNotes(i); }
+        else if (G[i].r && p && auto && !s.touched && !s.orig) putNotes(i, p);
+      }
+    }
+    function renderNotesPanel() {
+      const el = $("#notes-panel", root), r = NP.res;
+      if (!el) return;
+      if (!r || (r.confidence === "nessuna" && !r.unknown.length)) { el.innerHTML = ""; return; }
+      const ver = A.versionById(form.decklist_id.value);
+      const lines = [1, 2].filter((i) => G[i].r && NP.prop["sb" + (i + 1)]).map((i) => `<span class="np-g"><b>G${i + 1}</b> ${sbSummaryHTML(NP.prop["sb" + (i + 1)])}</span>`);
+      if (!lines.length && r.plans.length) r.plans.forEach((p) => lines.push(`<span class="np-g"><b>${p.side === "play" ? "Play" : p.side === "draw" ? "Draw" : "Tutte"}</b> ${sbSummaryHTML(p)}</span>`));
+      if (r.keep.length) lines.push(`<span class="np-g"><b>Tieni</b> ${r.keep.map((n) => `<span class="sb-in" data-card="${esc(n)}">${esc(n)}</span>`).join("")}</span>`);
+      const names = ver ? [...A.listMap([...A.parseList(ver.maindeck), ...A.parseList(ver.sideboard)]).values()].map((c) => c.name).sort((a, b) => a.localeCompare(b)) : [];
+      const teach = r.unknown.map((w) => `<span class="np-unk"><b>${esc(w)}</b> →
+        ${names.length ? `<select><option value="">— carta —</option>${names.map((n) => `<option>${esc(n)}</option>`).join("")}</select>` : `<input placeholder="Nome carta">`}
+        <button type="button" class="btn sm" data-act="teach" data-w="${esc(w)}">Insegna soprannome</button></span>`).join("");
+      const applied = SB.some((s, i) => i && s.notes), canApply = [1, 2].some((i) => NP.prop["sb" + (i + 1)] && !(SB[i].notes && sbKey(NP.prop["sb" + (i + 1)]) === sbKey(SB[i])));
+      el.innerHTML = `<div class="notes-panel">
+        <div class="np-head"><span>📝 <b>Dalle note</b></span><span class="np-conf c-${esc(r.confidence)}">confidenza ${esc(r.confidence)}</span></div>
+        ${lines.length ? `<div class="np-lines">${lines.join("")}</div>` : ""}
+        ${r.warnings.length ? `<div class="warn">${r.warnings.map(esc).join("<br>")}</div>` : ""}
+        ${teach ? `<div class="np-teach"><span class="muted small">Parole non riconosciute:</span>${teach}</div>` : ""}
+        <div class="np-actions">${canApply ? `<button type="button" class="btn sm primary" data-act="apply">Applica</button>` : ""}${applied ? `<button type="button" class="btn sm" data-act="undo">Annulla</button>` : ""}</div>
+      </div>`;
+      if (A.cards && A.cards.bindHover) A.cards.bindHover(el);
+    }
+    $("#notes-panel", root).addEventListener("click", (e) => {
+      const b = e.target.closest("[data-act]"); if (!b) return;
+      if (b.dataset.act === "apply") {
+        for (const i of [1, 2]) { const p = NP.prop["sb" + (i + 1)]; if (G[i].r && p) putNotes(i, p); }
+        NP.suppress = null; render();
+      } else if (b.dataset.act === "undo") {
+        for (const i of [1, 2]) if (SB[i].notes) dropNotes(i);
+        NP.suppress = form.notes.value.trim(); render();
+      } else if (b.dataset.act === "teach") {
+        const card = (b.closest(".np-unk").querySelector("select,input").value || "").trim();
+        if (!card) { A.toast("Scegli la carta"); return; }
+        A.guard(async () => { await A.saveAliases({ ...A.aliases(), [b.dataset.w]: card }); A.toast(`“${b.dataset.w}” = ${card}`); render(); });
+      }
+    });
+    let npTimer;
+    form.notes.addEventListener("input", () => { clearTimeout(npTimer); npTimer = setTimeout(render, 400); });
+
     function renderSB() {
       const area = $("#sb-area", root);
       area.innerHTML = [1, 2].map((i) => (G[i].r ? `<div class="sb-box" data-sbi="${i}">
-        <div class="sb-line"><span class="small muted"><b>G${i + 1}</b> Sideboard:</span>
+        <div class="sb-line"><span class="small muted"><b>G${i + 1}</b> Sideboard:</span>${SB[i].notes ? `<span class="nb-badge" title="Proposta dall'interprete delle note">dalle note</span>` : ""}
           <span data-sbsum>${sbSummaryHTML(SB[i], `<span class="muted small">Nessuna sidata registrata</span>`)}</span>
           <button type="button" class="btn sm" data-sbtoggle="${i}">${SB[i].open ? "Chiudi" : (SB[i].in.length || SB[i].out.length ? "Modifica" : "Aggiungi")}</button></div>
         <div class="sb-panel"${SB[i].open ? "" : " hidden"}></div></div>` : "")).join("");
@@ -175,14 +243,14 @@
         const box = area.querySelector(`[data-sbi="${i}"]`);
         if (!box || !SB[i].open) continue;
         const side = G[i].p === false ? "draw" : "play";
-        const buttons = [{ label: `Usa guida (${side})`, run(ed) { const g = guideSb(form.archetype_id.value, G[i].p); ed.set(g); SB[i].manual = false; } }];
+        const buttons = [{ label: `Usa guida (${side})`, run(ed) { const g = guideSb(form.archetype_id.value, G[i].p); ed.set(g); SB[i].manual = false; SB[i].notes = false; delete NP.undo[i]; } }];
         if (i === 2) buttons.push({ label: "Uguale a G2", run(ed) { ed.set({ in: SB[1].in, out: SB[1].out }); } });
         sbEditor(box.querySelector(".sb-panel"), {
           version: () => A.versionById(form.decklist_id.value),
           value: SB[i],
           buttons,
           onChange(v) {
-            SB[i].in = v.in; SB[i].out = v.out; SB[i].manual = true;
+            SB[i].in = v.in; SB[i].out = v.out; SB[i].manual = true; SB[i].touched = true; if (SB[i].notes) { SB[i].notes = false; delete NP.undo[i]; box.querySelector(".nb-badge")?.remove(); }
             box.querySelector("[data-sbsum]").innerHTML = sbSummaryHTML(SB[i], `<span class="muted small">Nessuna sidata registrata</span>`);
           },
           onClose() { SB[i].open = false; renderSB(); },
@@ -193,7 +261,7 @@
       const b = e.target.closest("[data-sbtoggle]"); if (!b) return;
       const i = +b.dataset.sbtoggle; SB[i].open = !SB[i].open; renderSB();
     });
-    form.decklist_id.addEventListener("change", renderSB);
+    form.decklist_id.addEventListener("change", render);
     form.archetype_id.addEventListener("change", () => {
       for (let i = 1; i < 3; i++) if (!SB[i].orig) SB[i].manual = false;
       render();
@@ -226,8 +294,10 @@
           </div>
         </div>`;
       }).join("") + `<span class="muted small">Play/draw di G2 e G3 si compilano da soli (chi perde va on the play): correggili se serve.</span>`;
+      notesSync();
       applyGuide();
       renderSB();
+      renderNotesPanel();
       const fake = { g1: G[0].r, g2: G[1].r, g3: G[2].r };
       const gs = A.gamesOf(fake);
       const prev = $("#res-prev", root);
