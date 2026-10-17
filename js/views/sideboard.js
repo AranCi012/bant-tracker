@@ -3,6 +3,7 @@
   "use strict";
   const A = window.App;
   const { $, $$, esc, pct, S } = A;
+  const canEdit = () => !A.canEdit || A.canEdit();
   const MINUS = "−";
 
   // ---------------------------------------------------------------------
@@ -235,7 +236,7 @@
           <button class="btn sm" id="sb-csv">Esporta statistiche (.csv)</button>
           <button class="btn sm" id="sb-csv2">Esporta carte (.csv)</button>
         </div></details>
-      ${A.notes ? `<a class="sbo-notes no-print" href="#sideboard/note"><span>📝 Sidate dalle note <b>(${nRev} da rivedere)</b></span><span aria-hidden="true">→</span></a>` : ""}
+      ${A.notes && canEdit() ? `<a class="sbo-notes no-print" href="#sideboard/note"><span>📝 Sidate dalle note <b>(${nRev} da rivedere)</b></span><span aria-hidden="true">→</span></a>` : ""}
       <div class="no-print">${A.filtersHTML()}</div>
       <div class="card" id="sb-summary">
         <div class="section-head"><h2>Matchup</h2><span class="muted small" id="sbo-count"></span></div>
@@ -265,7 +266,7 @@
         list.innerHTML = q
           ? `<p class="muted sbo-empty">Nessun matchup corrisponde a “${esc(sbo.q.trim())}”.</p>`
           : `<div class="sbo-empty"><p>Ancora nessuna guida né game post-board per questo mazzo.</p>
-              <p class="muted small">Registra una partita con la sidata, scrivi una guida aprendo un avversario (togli il filtro “Solo con sidata o guida”) oppure leggi le sidate dalle tue note: <a href="#sideboard/note">Sidate dalle note</a>.</p></div>`;
+              ${canEdit() ? `<p class="muted small">Registra una partita con la sidata, scrivi una guida aprendo un avversario (togli il filtro “Solo con sidata o guida”) oppure leggi le sidate dalle tue note: <a href="#sideboard/note">Sidate dalle note</a>.</p>` : ""}</div>`;
       } else list.innerHTML = xs.map((r) => rowHTML(r, eBy.get(r.id))).join("");
       if (A.cards && A.cards.bindHover) A.cards.bindHover(list);
     };
@@ -299,10 +300,15 @@
       draft = { arch: archId, deck: deck.id, notes: g0 ? g0.notes || "" : "", play: guideLists(g0, "play"), draw: guideLists(g0, "draw") };
     }
     const ms = A.filtered().filter((m) => m.archetype_id === archId);
+    const ro = !canEdit();
     root.innerHTML = `
       <div class="page-head"><div><a class="small" href="#sideboard">← Tutte le guide</a><h1 style="margin-top:4px">Sideboard vs ${esc(arch.name)} <span class="muted" style="font-weight:500">· ${esc(deck.name)}</span></h1></div>
         <div class="inline no-print"><button class="btn sm" id="sd-print">Stampa / PDF</button></div></div>
-      <div class="card">
+      ${ro ? `<div class="card"><div class="section-head"><h2>Guida</h2></div>
+        <h3>On the play</h3>${A.sbSummaryHTML(guideLists(g0, "play"), `<span class="muted small">—</span>`)}
+        <h3 style="margin-top:18px">On the draw</h3>${A.sbSummaryHTML(guideLists(g0, "draw"), `<span class="muted small">—</span>`)}
+        ${g0 && (g0.notes || "").trim() ? `<h3 style="margin-top:18px">Note</h3><pre class="plan">${esc(g0.notes)}</pre>` : `<p class="muted small" style="margin-bottom:0">${hasGuide(g0) ? "" : "Nessuna guida scritta"}</p>`}
+      </div>` : `<div class="card">
         <div class="section-head"><h2>Guida</h2>
           <span class="muted small">${ver ? `Carte proposte dalla lista attiva: <b>${esc(ver.name)}</b>` : `Nessuna lista salvata per questo mazzo: puoi comunque aggiungere le carte a mano.`}</span></div>
         <h3>On the play</h3><div id="ed-play"></div>
@@ -312,22 +318,23 @@
           <button class="btn" id="sd-copy-pd">Copia da play a draw</button>
           <button class="btn primary" id="sd-save">Salva guida</button>
         </div>
-      </div>
+      </div>`}
       <div class="card" id="sd-media"></div>
       <div class="no-print">${A.filtersHTML()}</div>
       <div id="sd-stats"></div>`;
 
     const ed = {};
-    for (const [sd] of SIDES) {
+    if (!ro) for (const [sd] of SIDES) {
       ed[sd] = A.sbEditor($(`#ed-${sd}`, root), {
         version: () => ver,
         value: draft[sd],
         onChange(v) { draft[sd] = v; },
       });
     }
+    $("#sd-print", root).onclick = () => window.print();
+    if (!ro) {
     $("#sd-notes", root).oninput = (e) => { draft.notes = e.target.value; };
     $("#sd-copy-pd", root).onclick = () => { ed.draw.set({ in: draft.play.in, out: draft.play.out }); A.toast("Copiato da play a draw (ricorda di salvare)"); };
-    $("#sd-print", root).onclick = () => window.print();
     $("#sd-save", root).onclick = () => A.guard(async () => {
       await A.saveGuide(archId, {
         play_in: A.listToText(cleanList(draft.play.in)), play_out: A.listToText(cleanList(draft.play.out)),
@@ -338,6 +345,7 @@
       A.toast("Guida salvata");
       viewDetail(root, archId);
     });
+    }
     A.bindFilters(root, () => viewDetail(root, archId));
     renderMedia($("#sd-media", root), ms, archId);
     renderStats($("#sd-stats", root), ms, archId);
@@ -509,6 +517,11 @@
   }
 
   function viewNotes(root) {
+    if (!canEdit()) {
+      root.innerHTML = `<div class="page-head"><div><a class="small" href="#sideboard">← Tutte le guide</a><h1 style="margin-top:4px">Sidate dalle note</h1></div></div>
+        <div class="card empty-state"><p>Accesso in sola lettura: questa sezione serve a modificare le sidate e non è disponibile.</p></div>`;
+      return;
+    }
     const deck = A.currentDeck();
     const all = noteRows(A.filtered(), ntState.showAll);
     const ign = all.filter((r) => r.ignored), act = all.filter((r) => !r.ignored);

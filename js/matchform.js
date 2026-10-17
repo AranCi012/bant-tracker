@@ -374,6 +374,10 @@
   }
 
   function viewAdd(root, archId) {
+    if (A.canEdit && !A.canEdit()) {
+      root.innerHTML = `<div style="max-width:720px;margin:0 auto"><div class="page-head"><h1>Registra partita</h1></div><div class="card empty-state"><p>Accesso in sola lettura: non puoi registrare partite.</p><a class="btn" href="#dashboard">Torna alla dashboard</a></div></div>`;
+      return;
+    }
     const draft = { archetype_id: archId || "" };
     root.innerHTML = `<div style="max-width:720px;margin:0 auto">
       <div class="page-head"><h1>Registra partita</h1></div>

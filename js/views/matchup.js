@@ -3,6 +3,8 @@
   "use strict";
   const A = window.App;
   const { $, esc, pct } = A;
+  const canEdit = () => !A.canEdit || A.canEdit();
+  const emptyView = (msg) => (canEdit() ? A.emptyState(msg) : `<div class="card empty-state"><p>${msg}</p></div>`);
 
   function viewMatchup(root, archId) {
     if (archId) return viewMatchupDetail(root, archId);
@@ -13,7 +15,7 @@
     root.innerHTML = `
       <div class="page-head"><h1>Matrice matchup <span class="muted" style="font-weight:500">· ${esc(A.currentDeck().name)}</span></h1></div>
       ${A.filtersHTML()}
-      ${!groups.length ? A.emptyState("Nessun match con questi filtri.") : `
+      ${!groups.length ? emptyView("Nessun match con questi filtri.") : `
       <div class="card">
         <div class="section-head"><h2>Matchup × situazione</h2><span class="muted small">Clicca un matchup per il dettaglio</span></div>
         <div class="table-wrap"><table class="heat">
@@ -50,12 +52,12 @@
     const rows = [];
     for (const m of A.chrono(ms).reverse()) for (const g of A.gamesOf(m)) if (g.n >= 2 && g.sb) rows.push({ m, g });
     const missing = ms.reduce((n, m) => n + A.gamesOf(m).filter((g) => g.n >= 2 && !g.sb).length, 0);
-    return `<div class="card"><div class="section-head"><h2>Sidate registrate</h2><a class="small" href="#sideboard/note">📝 Sidate dalle note →</a></div>
+    return `<div class="card"><div class="section-head"><h2>Sidate registrate</h2><a class="small" data-edit href="#sideboard/note">📝 Sidate dalle note →</a></div>
       ${rows.length ? `<div class="table-wrap"><table class="sides-table"><thead><tr><th>Data</th><th>Giocatore</th><th>Game</th><th>Lato</th><th>Esito</th><th>Sidata</th></tr></thead><tbody>
         ${rows.map(({ m, g }) => `<tr><td class="num">${A.fmtDate(m.played_at)}</td><td>${esc(m.player)}</td><td>G${g.n}</td>
           <td>${g.play === true ? "play" : g.play === false ? "draw" : "—"}</td><td><span class="pill ${g.r}">${g.r === "W" ? "V" : g.r === "L" ? "P" : "="}</span></td>
           <td style="white-space:normal">${A.sbSummaryHTML ? A.sbSummaryHTML(g.sb) : ""}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Nessuna sidata registrata per questo matchup.</p>`}
-      ${missing ? `<p class="small muted" style="margin-bottom:0">${missing} game post-board senza sidata: se l'avete scritta nelle note, recuperala da “Sidate dalle note”.</p>` : ""}
+      ${missing && canEdit() ? `<p class="small muted" style="margin-bottom:0">${missing} game post-board senza sidata: se l'avete scritta nelle note, recuperala da “Sidate dalle note”.</p>` : ""}
     </div>`;
   }
 
@@ -67,7 +69,7 @@
     const g = A.guideFor(archId);
     root.innerHTML = `
       <div class="page-head"><div><a href="#matchup" class="small">← Matrice</a><h1>${esc(A.currentDeck().name)} vs ${esc(a.name)}</h1></div>
-        <a class="btn primary" href="#add/${encodeURIComponent(a.id)}">+ Partita vs ${esc(a.name)}</a></div>
+        <a class="btn primary" data-edit href="#add/${encodeURIComponent(a.id)}">+ Partita vs ${esc(a.name)}</a></div>
       ${A.filtersHTML()}
       <div class="kpis">
         ${A.kpi("Match win rate", pct(s.wr), `${A.record(s)}${s.ci ? ` · IC95 ${pct(s.ci[0])}–${pct(s.ci[1])}` : ""}`)}
@@ -79,7 +81,7 @@
       </div>
       <div class="grid g2">
         <div class="card">
-          <div class="section-head"><h2>Guida di sideboard</h2><a class="btn sm" href="#sideboard/${encodeURIComponent(a.id)}">Apri / modifica →</a></div>
+          <div class="section-head"><h2>Guida di sideboard</h2><a class="btn sm" href="#sideboard/${encodeURIComponent(a.id)}">${canEdit() ? "Apri / modifica →" : "Apri →"}</a></div>
           <h3>On the play</h3>${guideSummary(g, "play")}
           <h3 style="margin-top:10px">On the draw</h3>${guideSummary(g, "draw")}
           ${g && g.notes ? `<h3 style="margin-top:10px">Note</h3><pre class="plan">${esc(g.notes)}</pre>` : ""}

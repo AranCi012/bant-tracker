@@ -3,6 +3,8 @@
   "use strict";
   const A = window.App;
   const { $, S, DB, today } = A;
+  const canEdit = () => !A.canEdit || A.canEdit();
+  const emptyView = (msg) => (canEdit() ? A.emptyState(msg) : `<div class="card empty-state"><p>${msg}</p></div>`);
 
   function viewHistory(root) {
     const ms = A.chrono(A.filtered()).reverse();
@@ -12,16 +14,16 @@
           <a class="btn sm primary" href="#report">📄 Report leggibile</a>
           <button class="btn sm" id="exp-csv">Esporta CSV</button>
           <button class="btn sm" id="exp-json">Backup JSON</button>
-          <label class="btn sm">Importa backup<input type="file" id="imp-json" accept=".json,application/json" hidden></label>
+          <label class="btn sm" data-edit>Importa backup<input type="file" id="imp-json" accept=".json,application/json" hidden></label>
         </div></div>
       ${A.filtersHTML()}
-      ${ms.length ? `<div class="card">${A.matchTable(ms)}<p class="muted small" style="margin-bottom:0">Clicca una riga per modificarla o eliminarla.</p></div>` : A.emptyState(A.deckMatches().length ? "Nessun match con questi filtri." : "Ancora nessuna partita registrata.")}`;
+      ${ms.length ? `<div class="card">${A.matchTable(ms)}${canEdit() ? `<p class="muted small" style="margin-bottom:0">Clicca una riga per modificarla o eliminarla.</p>` : ""}</div>` : emptyView(A.deckMatches().length ? "Nessun match con questi filtri." : canEdit() ? "Ancora nessuna partita registrata." : "Nessun match ancora.")}`;
     A.bindFilters(root, () => viewHistory(root));
     A.bindMatchRows(root);
     A.bindDemo(root);
     $("#exp-csv", root).onclick = () => exportCSV(ms);
     $("#exp-json", root).onclick = () => A.download(`meta-backup-${today()}.json`, JSON.stringify({ version: 2, decks: S.decks, archetypes: S.archetypes, decklists: S.decklists, matches: S.matches, sideboard_guides: S.guides }, null, 2), "application/json");
-    $("#imp-json", root).onchange = (e) => A.guard(() => importJSON(e.target.files[0]));
+    if ($("#imp-json", root)) $("#imp-json", root).onchange = (e) => A.guard(() => importJSON(e.target.files[0]));
   }
 
   const sbText = (sb) => (sb ? [...(sb.in || []).map((c) => `+${c.q} ${c.name}`), ...(sb.out || []).map((c) => `-${c.q} ${c.name}`)].join("; ") : "");

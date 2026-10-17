@@ -3,14 +3,15 @@
   "use strict";
   const A = window.App;
   const { $, $$, esc, pct, S, DB } = A;
+  const canEdit = () => !A.canEdit || A.canEdit();
 
   function viewOpponents(root) {
     const ms = A.filtered();
     const count = (id) => ms.filter((m) => m.archetype_id === id).length;
     root.innerHTML = `
-      <div class="page-head"><h1>Avversari</h1><button class="btn primary" id="add-arch">+ Archetipo</button></div>
+      <div class="page-head"><h1>Avversari</h1><button class="btn primary" id="add-arch" data-edit>+ Archetipo</button></div>
       <div class="seg opp-switch"><a href="#opponents" class="on">Mazzi</a><a href="#players">Giocatori</a></div>
-      <p class="muted" style="margin-top:-6px">Gli archetipi che incontrate (validi per tutti i vostri mazzi). Le statistiche sono quelle di <b>${esc(A.currentDeck().name)}</b>. Clicca per modificarli.</p>
+      <p class="muted" style="margin-top:-6px">Gli archetipi che incontrate (validi per tutti i vostri mazzi). Le statistiche sono quelle di <b>${esc(A.currentDeck().name)}</b>. ${canEdit() ? "Clicca per modificarli." : "Clicca per vedere le statistiche."}</p>
       <div class="opp-list">${[...S.archetypes].sort((x, y) => count(y.id) - count(x.id) || x.name.localeCompare(y.name)).map((a) => {
         const s = A.stats(ms.filter((m) => m.archetype_id === a.id));
         const g = A.guideFor(a.id);
@@ -21,8 +22,8 @@
           <div class="plan">${hasGuide ? "✓ Guida di sideboard" : `<span style="opacity:.7">Nessuna guida di sideboard</span>`}${a.notes ? ` · ${esc(a.notes)}` : ""}</div>
         </div>`;
       }).join("")}</div>`;
-    $("#add-arch", root).onclick = () => editArchetype(null, () => viewOpponents(root));
-    $$("[data-arch]", root).forEach((el) => (el.onclick = () => editArchetype(A.archById(el.dataset.arch), () => viewOpponents(root))));
+    $("#add-arch", root).onclick = () => canEdit() && editArchetype(null, () => viewOpponents(root));
+    $$("[data-arch]", root).forEach((el) => (el.onclick = () => !canEdit() ? (location.hash = "#matchup/" + encodeURIComponent(el.dataset.arch)) : editArchetype(A.archById(el.dataset.arch), () => viewOpponents(root))));
   }
 
   function editArchetype(a, after) {
