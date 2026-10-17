@@ -489,8 +489,18 @@
 
   // ---- Barra in alto: utente + selettore mazzo -------------------------
   function renderWho() {
-    // Ospiti in sola lettura: in alto a destra non compare nulla (niente invita, esci, nome o etichette)
-    if (!canEdit()) { $("#who").innerHTML = ""; $("#who").hidden = true; return; }
+    // Ospiti in sola lettura: in alto a destra solo "condividi" (il loro link di sola lettura, da passare ad altri)
+    if (!canEdit()) {
+      $("#who").hidden = false;
+      $("#who").innerHTML = "";
+      if (App.mobile && App.mobile.openInvite) {
+        const sh = document.createElement("button");
+        sh.className = "btn ghost sm"; sh.textContent = "condividi"; sh.id = "invite-btn";
+        sh.onclick = () => App.mobile.openInvite();
+        $("#who").appendChild(sh);
+      }
+      return;
+    }
     $("#who").hidden = false;
     $("#who").innerHTML = S.me
       ? `Ciao <b>${esc(S.me)}</b> <button class="btn ghost sm" id="change-me">cambia</button>`
