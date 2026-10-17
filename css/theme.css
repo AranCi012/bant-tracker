@@ -167,3 +167,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 /* Avviso filtri attivi: impossibile non vederlo */
 .filter-warn { margin: -6px 0 16px; padding: 10px 14px; border-radius: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
   background: color-mix(in srgb, #eda100 16%, var(--surface)); border: 1px solid color-mix(in srgb, #eda100 45%, transparent); color: var(--text); }
+/* Sola lettura: i controlli che scrivono non compaiono */
+body.readonly [data-edit] { display: none !important; }
+.ro-badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-weight: 600; font-size: .8rem;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }

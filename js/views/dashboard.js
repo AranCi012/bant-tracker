@@ -3,6 +3,8 @@
   "use strict";
   const A = window.App;
   const { $, esc, pct, fmtDate, S, LOW_N } = A;
+  const canEdit = () => !A.canEdit || A.canEdit();
+  const emptyView = (msg) => (canEdit() ? A.emptyState(msg) : `<div class="card empty-state"><p>${msg}</p></div>`);
 
   function viewDashboard(root) {
     const ms = A.filtered();
@@ -13,7 +15,7 @@
     root.innerHTML = `
       ${heroHTML(deck, s, ms, all)}
       ${A.filtersHTML()}
-      ${!ms.length ? A.emptyState(all.length ? "Nessun match con questi filtri." : `Ancora nessuna partita registrata con ${esc(deck.name)}.`) : `
+      ${!ms.length ? emptyView(all.length ? "Nessun match con questi filtri." : canEdit() ? `Ancora nessuna partita registrata con ${esc(deck.name)}.` : "Nessun match ancora.") : `
       <div class="kpis">
         ${A.kpi("Match win rate", pct(s.wr), `${A.record(s)}${s.ci ? ` · IC95 ${pct(s.ci[0])}–${pct(s.ci[1])}` : ""}`, s.wr)}
         ${A.kpi("Game win rate", pct(s.gwr), `${s.gW}-${s.gL}${s.gD ? "-" + s.gD : ""} in ${s.gN} game`, s.gwr)}

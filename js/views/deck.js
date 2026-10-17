@@ -3,6 +3,7 @@
   "use strict";
   const A = window.App;
   const { $, $$, esc, pct, today, S, DB, REMOTE } = A;
+  const canEdit = () => !A.canEdit || A.canEdit();
 
   const MINUS = "−";
   const scry = (name) => `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}&format=image&version=normal`;
@@ -345,9 +346,9 @@
   function viewDeck(root) {
     if (!A.versions().length) {
       root.innerHTML = `<div class="page-head"><h1>La nostra lista</h1></div>
-        <div class="card empty-state"><p>Nessuna lista salvata per “${esc(A.currentDeck().name)}”. Incolla la vostra lista (formato MTGO/Arena: “4 Brainstorm”).</p>
-        <button class="btn primary" id="new-deck">+ Aggiungi lista</button></div>`;
-      $("#new-deck", root).onclick = () => editDeck(null);
+        <div class="card empty-state"><p>Nessuna lista salvata per “${esc(A.currentDeck().name)}”.${canEdit() ? " Incolla la vostra lista (formato MTGO/Arena: “4 Brainstorm”)." : ""}</p>
+        ${canEdit() ? `<button class="btn primary" id="new-deck">+ Aggiungi lista</button>` : ""}</div>`;
+      if ($("#new-deck", root)) $("#new-deck", root).onclick = () => editDeck(null);
       return;
     }
     const sel = (A.versions().find((v) => v.id === S.deckSel)) || A.activeVersion();
@@ -363,7 +364,7 @@
     const zone = (list, id, empty) => (!list.length ? `<p class="muted">${empty}</p>` : useImg ? `<div id="${id}" class="vis"><p class="muted small">Carico le immagini…</p></div>` : cardListHTML(list));
     root.innerHTML = `
       <div class="page-head"><h1>La nostra lista <span class="muted" style="font-weight:500">· ${esc(A.currentDeck().name)}</span></h1>
-        <div class="inline"><button class="btn" id="new-deck">+ Nuova versione</button></div></div>
+        <div class="inline"><button class="btn" id="new-deck" data-edit>+ Nuova versione</button></div></div>
       <div class="matchup-bar"><label for="matchup-sel"><b>Matchup</b></label>
         <select id="matchup-sel"><option value="">Tutti i matchup</option>${muOpts.map((o) => `<option value="${esc(o.id)}"${o.id === matchup ? " selected" : ""}>${esc(o.arch.name)} (${o.s.n})</option>`).join("")}</select>
         ${matchup ? `<span class="small muted">Tutte le statistiche qui sotto sono solo per questo matchup</span>` : ""}
@@ -374,10 +375,10 @@
             <div><h2 style="margin:0">${esc(sel.name)} ${sel.is_active ? `<span class="badge">ATTIVA</span>` : ""}</h2>
               <span class="small">${statsLine(ds)}</span></div>
             <div class="inline">
-              ${sel.is_active ? "" : `<button class="btn sm" id="set-active">Rendi attiva</button>`}
-              <button class="btn sm" id="edit-deck">Modifica</button>
-              <button class="btn sm" id="dup-deck">Duplica</button>
-              <button class="btn sm danger" id="del-deck">Elimina</button>
+              ${sel.is_active ? "" : `<button class="btn sm" id="set-active" data-edit>Rendi attiva</button>`}
+              <button class="btn sm" id="edit-deck" data-edit>Modifica</button>
+              <button class="btn sm" id="dup-deck" data-edit>Duplica</button>
+              <button class="btn sm danger" id="del-deck" data-edit>Elimina</button>
             </div>
           </div>
           <div class="inline" style="justify-content:space-between;margin-bottom:8px;flex-wrap:wrap">

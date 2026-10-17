@@ -131,6 +131,12 @@
       if (error) throw error;
       return data === true;
     },
+    // 'edit' | 'view' | null. Se il database non ha ancora la migrazione 003 si ricade sul vecchio controllo (solo 'edit').
+    async access() {
+      const { data, error } = await this.client.rpc("access_level");
+      if (!error) return data || null;
+      return (await this.check()) ? "edit" : null;
+    },
     async init() {},
     async all(t) {
       const out = []; const page = 1000;
@@ -142,12 +148,22 @@
       }
       return out;
     },
-    async insert(t, row) { const { data, error } = await this.client.from(t).insert(row).select().single(); if (error) throw error; return data; },
-    async update(t, id, patch) { const { data, error } = await this.client.from(t).update(patch).eq("id", id).select().single(); if (error) throw error; return data; },
-    async remove(t, id) { const { error } = await this.client.from(t).delete().eq("id", id); if (error) throw error; },
+    async insert(t, row) { readOnlyGuard(); const { data, error } = await this.client.from(t).insert(row).select().single(); if (error) throw error; return data; },
+    async update(t, id, patch) { readOnlyGuard(); const { data, error } = await this.client.from(t).update(patch).eq("id", id).select().single(); if (error) throw error; return data; },
+    async remove(t, id) { readOnlyGuard(); const { error } = await this.client.from(t).delete().eq("id", id); if (error) throw error; },
   };
 
   const DB = REMOTE ? Remote : Local;
+
+  // ---- Sola lettura ------------------------------------------------------
+  // Chi entra con il codice "solo visione" vede tutto ma non può scrivere: il database lo rifiuta comunque (RLS),
+  // qui lo blocchiamo prima con un messaggio chiaro e l'interfaccia nasconde i controlli marcati data-edit.
+  const canEdit = () => S.access !== "view";
+  function readOnlyGuard() { if (!canEdit()) throw new Error("Accesso in sola lettura: non puoi modificare"); }
+  async function getViewKey() {
+    if (!REMOTE || !Remote.client) return null;
+    try { const { data, error } = await Remote.client.rpc("get_view_key"); return error ? null : data || null; } catch { return null; }
+  }
 
   // =====================================================================
   //  State
@@ -162,6 +178,7 @@
     me: lsGet("me", ""),
     filters: { player: "", version: "", event: "", from: "", to: "" }, // ogni visita parte da "tutti i match"
     deckSel: null,
+    access: "edit",   // "edit" | "view"
     ready: false,
   };
   delete S.filters.deck; // filtro della v1, sostituito da "version"
@@ -408,6 +425,7 @@
       }).join("")}</tbody></table></div>`;
   }
   function bindMatchRows(root) {
+    if (!canEdit()) { $$("[data-match]", root).forEach((tr) => tr.classList.remove("click")); return; }
     $$("[data-match]", root).forEach((tr) => (tr.onclick = () => {
       const m = S.matches.find((x) => x.id === tr.dataset.match);
       if (m) openModal(`<h2>Modifica match</h2>${App.matchFormHTML(m)}`, (body) => App.bindMatchForm(body, m, () => { closeModal(); route(); }));
@@ -440,6 +458,7 @@
   }
 
   function emptyState(msg) {
+    if (!canEdit()) return `<div class="card empty-state"><p>${msg}</p></div>`;
     return `<div class="card empty-state"><p>${msg}</p><a class="btn primary" href="#add">+ Registra la prima partita</a>
       ${!REMOTE && !S.matches.length ? `<div style="margin-top:10px"><button class="btn sm" id="demo">Carica dati demo per provare</button></div>` : ""}</div>`;
   }
@@ -454,7 +473,7 @@
     const v = App.views[name] ? name : "dashboard";
     const tab = { players: "opponents", report: "sideboard" }[v] || v;
     $$("#tabs a").forEach((a) => a.classList.toggle("active", a.dataset.view === tab));
-    $("#fab").hidden = v === "add";
+    $("#fab").hidden = v === "add" || !canEdit();
     hideTip();
     if (!currentDeck()) { viewNoDeck($("#view")); return; }
     App.views[v]($("#view"), arg ? decodeURIComponent(arg) : null);
@@ -463,16 +482,19 @@
   window.addEventListener("hashchange", route);
 
   function viewNoDeck(root) {
+    if (!canEdit()) { root.innerHTML = `<div class="card empty-state"><p>Nessun mazzo ancora.</p></div>`; return; }
     root.innerHTML = `<div class="card empty-state"><p>Crea il primo mazzo che giocate (es. “Bant”).</p><button class="btn primary" id="nd">+ Nuovo mazzo</button></div>`;
     $("#nd", root).onclick = () => editDeckEntity(null);
   }
 
   // ---- Barra in alto: utente + selettore mazzo -------------------------
   function renderWho() {
-    $("#who").innerHTML = S.me
+    if (!canEdit()) {
+      $("#who").innerHTML = `<span class="ro-badge" title="Puoi vedere tutto ma non modificare">👀 Sola lettura</span>`;
+    } else $("#who").innerHTML = S.me
       ? `Ciao <b>${esc(S.me)}</b> <button class="btn ghost sm" id="change-me">cambia</button>`
       : `<button class="btn sm" id="change-me">Chi sei?</button>`;
-    $("#change-me").onclick = () => askName();
+    if ($("#change-me")) $("#change-me").onclick = () => askName();
     if (App.mobile && App.mobile.openInvite) {
       const inv = document.createElement("button");
       inv.className = "btn ghost sm"; inv.textContent = "invita"; inv.id = "invite-btn";
@@ -491,7 +513,7 @@
     if (!el) return;
     const cur = currentDeck();
     el.innerHTML = S.decks.map((d) => `<option value="${esc(d.id)}"${cur && d.id === cur.id ? " selected" : ""}>${esc(d.name)}</option>`).join("")
-      + `<option value="__manage">⚙ Gestisci mazzi…</option>`;
+      + (canEdit() ? `<option value="__manage">⚙ Gestisci mazzi…</option>` : "");
     el.onchange = () => {
       if (el.value === "__manage") { el.value = cur ? cur.id : ""; manageDecks(); return; }
       setDeck(el.value);
@@ -639,7 +661,9 @@
         const key = lsGet("groupKey", "");
         if (!key) return loginScreen();
         Remote.connect(key);
-        if (!(await Remote.check())) { lsSet("groupKey", ""); return loginScreen("Codice non valido."); }
+        const lvl = await Remote.access();
+        if (!lvl) { lsSet("groupKey", ""); return loginScreen("Codice non valido."); }
+        S.access = lvl;
         $("#banner").hidden = true;
       } else {
         await Local.init();
@@ -651,6 +675,7 @@
       await reload();
       $("#tabs").hidden = false;
       $("#deck-switch-wrap").hidden = false;
+      document.body.classList.toggle("readonly", !canEdit());
       renderWho();
       renderDeckSwitch();
       S.ready = true;
@@ -676,6 +701,7 @@
     wrColor, meter, coverCard, artUrl, toast, openModal, closeModal, showTip, hideTip, ttRows, guard, download, kpi,
     heatCell, heatLegend, confusionG1, matchTable, bindMatchRows,
     filtersHTML, bindFilters, emptyState, bindDemo,
+    canEdit, getViewKey,
     route, renderWho, renderDeckSwitch, manageDecks, start,
   });
 })();

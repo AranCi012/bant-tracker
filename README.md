@@ -15,6 +15,7 @@ Dashboard per registrare e analizzare le partite dei nostri mazzi di Magic (Lega
 - **Avversari**: archetipi modificabili con note (con "Unisci in…" per i doppioni) e, nella sezione **Giocatori**, le statistiche contro ogni giocatore avversario (dal campo "Nome avversario" dei match).
 - **Storico**: modifica ed eliminazione dei match, export CSV, backup e import JSON.
 - **Telefono**: si installa come app (Aggiungi a Home) e il bottone "invita" genera un link o QR code che fa entrare gli amici senza digitare il codice.
+- **Link di sola lettura**: dal bottone "invita" scegli "Solo visione" per condividere un link/QR con cui si vede tutto ma non si può modificare nulla (il blocco è nel database, non solo nell'interfaccia). Per cambiare il codice di sola lettura: `update private.settings set value = 'nuovo' where key = 'view_key';` nel SQL Editor.
 - **Filtri** per giocatore, versione lista, evento e date.
 
 Con pochi match le percentuali ballano parecchio: le celle con meno di 3 match sono tratteggiate e i tooltip mostrano l'intervallo di confidenza al 95%.
@@ -34,7 +35,7 @@ Servono due servizi gratuiti:
 
 1. Registrati su <https://supabase.com> e clicca **New project** (piano Free, regione `eu-central`).
 2. Apri `supabase/schema.sql` e alla riga `CAMBIAMI-metti-una-password` metti il **codice del gruppo** che darai ai tuoi amici.
-3. Su Supabase vai in **SQL Editor → New query**, incolla tutto il file e premi **Run**. Poi fai lo stesso con `supabase/migrations/002_multideck_sideboard.sql`.
+3. Su Supabase vai in **SQL Editor → New query**, incolla tutto il file e premi **Run**. Poi fai lo stesso, in ordine, con i file in `supabase/migrations/` (002, 003).
 4. Vai in **Project Settings → API** (o **Data API / API Keys**) e copia:
    - **Project URL** (`https://xxxx.supabase.co`)
    - la chiave **publishable** o **anon public** (non la `service_role` o `secret`!)
