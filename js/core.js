@@ -489,9 +489,10 @@
 
   // ---- Barra in alto: utente + selettore mazzo -------------------------
   function renderWho() {
-    if (!canEdit()) {
-      $("#who").innerHTML = `<span class="ro-badge" title="Puoi vedere tutto ma non modificare">👀 Sola lettura</span>`;
-    } else $("#who").innerHTML = S.me
+    // Ospiti in sola lettura: in alto a destra non compare nulla (niente invita, esci, nome o etichette)
+    if (!canEdit()) { $("#who").innerHTML = ""; $("#who").hidden = true; return; }
+    $("#who").hidden = false;
+    $("#who").innerHTML = S.me
       ? `Ciao <b>${esc(S.me)}</b> <button class="btn ghost sm" id="change-me">cambia</button>`
       : `<button class="btn sm" id="change-me">Chi sei?</button>`;
     if ($("#change-me")) $("#change-me").onclick = () => askName();
