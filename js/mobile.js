@@ -135,7 +135,7 @@
   }
 
   // Editor: due sezioni (gruppo e sola visione) con un selettore; una sola QR alla volta.
-  function openEditorInvite(url) {
+  function openEditorInvite(url, local) {
     let token = 0;             // invalida i render di tab precedenti
     let viewKeyP = null;       // il codice di sola visione si chiede una sola volta per apertura
 
@@ -164,7 +164,7 @@
         const renderFriends = (mine) => {
           const p = panel();
           if (!p || mine !== token) return;
-          p.innerHTML = `
+          p.innerHTML = `${local ? `<p class="muted small">Sei in <b>modalità locale</b>: questo link apre solo il sito, i dati restano in questo browser.</p>` : ""}
             <p class="small"><b>👥 Per gli amici del gruppo</b> — possono registrare partite e modificare</p>
             ${linkBlock("invite-friends", url, NOTE_EDIT)}`;
           bindLink(body, "invite-friends", url);
@@ -176,6 +176,10 @@
           p.innerHTML = `
             <p class="small"><b>👀 Solo visione</b> — vedono tutte le statistiche ma non possono modificare nulla</p>
             <p class="muted small" id="invite-view-loading">Caricamento…</p>`;
+          if (local) {
+            p.querySelector("#invite-view-loading").outerHTML = `<p class="muted small">Qui sei nell'<b>anteprima locale</b>, senza database condiviso: il link di sola visione (con il suo QR) si genera sul sito online, da questo stesso bottone.</p>`;
+            return;
+          }
           getViewKeyOnce().then((key) => {
             if (mine !== token) return; // l'utente ha cambiato tab nel frattempo
             const cur = panel();
@@ -211,7 +215,8 @@
     const url = inviteUrl();
     const coreReady = typeof A.canEdit === "function" && typeof A.getViewKey === "function";
 
-    if (local || !coreReady) return openLegacyInvite(url, local);
+    if (!coreReady) return openLegacyInvite(url, local);
+    if (local) return openEditorInvite(url, true);
     if (!A.canEdit()) return openViewerInvite(url);
     return openEditorInvite(url);
   }
