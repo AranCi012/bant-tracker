@@ -130,8 +130,13 @@
       <h2>Condividi in sola lettura</h2>
       <p class="muted small">Il link apre l'app in sola lettura: chi lo usa vede tutte le statistiche ma non può registrare né modificare nulla.</p>
       ${linkBlock("invite", url, NOTE_VIEW)}
-      ${INSTALL_HTML}`,
-      (body) => bindLink(body, "invite", url));
+      ${INSTALL_HTML}
+      <p class="small muted" style="margin-top:14px">Hai il codice per modificare? <a href="#" id="invite-relogin">Entra con il codice</a></p>`,
+      (body) => {
+        bindLink(body, "invite", url);
+        // Esci dalla sola lettura: dimentica il codice salvato e torna alla schermata del codice
+        body.querySelector("#invite-relogin").onclick = (e) => { e.preventDefault(); A.lsSet("groupKey", ""); location.hash = "dashboard"; location.reload(); };
+      });
   }
 
   // Editor: due sezioni (gruppo e sola visione) con un selettore; una sola QR alla volta.
