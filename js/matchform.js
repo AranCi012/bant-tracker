@@ -36,6 +36,7 @@
           <select name="decklist_id"><option value="">—</option>${A.versions().map((d) => `<option value="${esc(d.id)}"${d.id === deckSel ? " selected" : ""}>${esc(d.name)}${d.is_active ? " (attiva)" : ""}</option>`).join("")}</select>
         </label>
         <label class="field">Nome avversario <span class="muted" style="font-weight:400">(opzionale)</span><input name="opponent" list="opp-dl" value="${esc(m.opponent || "")}" placeholder="nick MTGO, nome…"><datalist id="opp-dl">${[...new Set(S.matches.map((x) => (x.opponent || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)).map((o) => `<option value="${esc(o)}">`).join("")}</datalist></label>
+        <div class="opp-hist full" id="opp-hist" aria-live="polite"></div>
         <label class="field full">Note <span class="muted" style="font-weight:400">(opzionale — se scrivi la sidata, es. “side otd: +2 priest −2 stifle”, la leggo da sola)</span><textarea name="notes" rows="2" class="notes-ta" placeholder="mulligan, carte chiave, errori, sidata…">${esc(m.notes || "")}</textarea></label>
         <div class="field full" id="notes-panel"></div>
       </div>
@@ -262,6 +263,33 @@
       const i = +b.dataset.sbtoggle; SB[i].open = !SB[i].open; renderSB();
     });
     form.decklist_id.addEventListener("change", render);
+    // ---- Avversario già incontrato? Storico dei match contro lo stesso nome (tutti i nostri mazzi)
+    const oppKey = (s) => String(s || "").trim().replace(/\s+/g, " ").toLowerCase();
+    function renderOppHistory() {
+      const box = $("#opp-hist", root); if (!box) return;
+      const k = oppKey(form.opponent.value);
+      const prev = k ? A.chrono(S.matches.filter((x) => x.id !== m.id && oppKey(x.opponent) === k)).reverse() : [];
+      if (!prev.length) { box.innerHTML = k.length >= 3 ? `<span class="muted small">Mai incontrato prima.</span>` : ""; return; }
+      const byA = new Map();
+      for (const x of prev) { if (!byA.has(x.archetype_id)) byA.set(x.archetype_id, []); byA.get(x.archetype_id).push(x); }
+      const last = prev[0], lastArch = A.archById(last.archetype_id), deckOf = (x) => (S.decks.find((d) => d.id === x.deck_id) || {}).name;
+      const multiDeck = S.decks.length > 1;
+      const parts = [...byA].map(([aid, list]) => {
+        const st = A.stats(list), a = A.archById(aid);
+        return `<span class="oh-arch"><b>${esc(a ? a.name : "?")}</b> <span class="pill ${st.W > st.L ? "W" : st.L > st.W ? "L" : "D"}">${A.record(st)}</span></span>`;
+      }).join(" ");
+      const r = A.matchResult(last);
+      box.innerHTML = `<div class="oh-card">👤 <b>Già affrontato ${prev.length === 1 ? "1 volta" : prev.length + " volte"}</b>: ${parts}
+        <div class="muted small">Ultima volta ${A.fmtDate(last.played_at)}: ${esc(lastArch ? lastArch.name : "?")}, ${r === "W" ? "vinto" : r === "L" ? "perso" : "pari"} da ${esc(last.player)}${multiDeck && deckOf(last) ? ` con ${esc(deckOf(last))}` : ""}.</div>
+        ${lastArch && form.archetype_id.value !== lastArch.id ? `<button type="button" class="btn sm" id="oh-use">Imposta avversario: ${esc(lastArch.name)}</button>` : ""}</div>`;
+      const use = $("#oh-use", box);
+      if (use) use.onclick = () => { form.archetype_id.value = lastArch.id; form.archetype_id.dispatchEvent(new Event("change")); renderOppHistory(); };
+    }
+    let ohT;
+    form.opponent.addEventListener("input", () => { clearTimeout(ohT); ohT = setTimeout(renderOppHistory, 150); });
+    form.opponent.addEventListener("change", renderOppHistory);
+    renderOppHistory();
+
     form.archetype_id.addEventListener("change", () => {
       for (let i = 1; i < 3; i++) if (!SB[i].orig) SB[i].manual = false;
       render();

@@ -212,3 +212,7 @@ mark.ev-ign { background: transparent; text-decoration: line-through; opacity: .
 .gp-bulk > summary::-webkit-details-marker { display: none; }
 .gp-bulk > summary::before { content: "▸"; color: var(--text-2); }
 .gp-bulk[open] > summary::before { content: "▾"; }
+/* Avversario già incontrato (form partita) */
+.opp-hist:empty { display: none; }
+.oh-card { padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.oh-arch { white-space: nowrap; margin-right: 6px; }
