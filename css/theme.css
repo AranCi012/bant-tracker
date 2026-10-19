@@ -172,3 +172,4 @@ body.readonly [data-edit] { display: none !important; }
 .ro-badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-weight: 600; font-size: .8rem;
   background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
 #who[hidden] { display: none !important; }
+.deck-row-r { gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
