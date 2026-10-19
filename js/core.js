@@ -496,7 +496,7 @@
     if (!S.ready) return;
     const [name, arg] = (location.hash.replace("#", "") || "dashboard").split("/");
     const v = App.views[name] ? name : "dashboard";
-    const tab = { players: "opponents", report: "sideboard" }[v] || v;
+    const tab = { players: "opponents", groups: "opponents", report: "sideboard" }[v] || v;
     $$("#tabs a").forEach((a) => a.classList.toggle("active", a.dataset.view === tab));
     $("#fab").hidden = v === "add" || !canEdit();
     hideTip();

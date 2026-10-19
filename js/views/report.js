@@ -54,6 +54,8 @@
       last: dates[dates.length - 1] || "",
       overall: A.stats(ms),
       matchups: A.byArchetype(ms),
+      // Gruppi di archetipi: solo se almeno un archetipo ne ha uno (altrimenti il report resta com'era)
+      groups: A.S.groups.length && A.S.archetypes.some((a) => a.group_id && A.groupById(a.group_id)) ? A.byGroup(ms) : [],
       sbState,
       sb: sbState === "ok" ? rep : null,
     };
@@ -190,21 +192,26 @@
       return `<article class="report">${head}<section class="rp-sec"><p>Nessun match con i filtri attuali. Cambia o azzera i filtri per vedere il report.</p></section></article>`;
     }
     const breve = `<section class="rp-sec"><h2>In breve</h2><div class="rp-lead">${sentencesBreve(m).map((s) => `<p>${esc(s)}</p>`).join("")}</div></section>`;
-    const rows = m.matchups.map((x) => {
-      const [cls, lab] = comento(x.s);
-      const w = Math.round(x.s.wr * 100);
-      return `<tr>
-        <td>${esc(x.arch.name)}</td>
+    // Tabella win rate (per avversario o per gruppo): items = [{ name, s }]
+    const winTable = (label, items) => {
+      const rows = items.map((x) => {
+        const [cls, lab] = comento(x.s);
+        const w = Math.round(x.s.wr * 100);
+        return `<tr>
+        <td>${esc(x.name)}</td>
         <td class="num">${x.s.n}</td>
         <td class="num">${recStr(x.s)}</td>
         <td class="rp-wr"><span class="rp-meter"><i style="width:${w}%;background:${x.s.wr >= 0.5 ? "var(--win)" : "var(--loss)"}"></i><b></b></span><span class="num">${pct(x.s.wr)}</span></td>
         <td><span class="rp-com ${cls}">${lab}</span></td>
       </tr>`;
-    }).join("");
+      }).join("");
+      return `<div class="table-wrap"><table class="rp-table">
+        <thead><tr><th>${label}</th><th class="num">Match</th><th class="num">Vinti–Persi</th><th>Win rate</th><th>Commento</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>`;
+    };
+    const perGruppo = m.groups.length ? `<h3 class="rp-h3">Per gruppo</h3>${winTable("Gruppo", m.groups)}<h3 class="rp-h3">Per avversario</h3>` : "";
     const matchup = `<section class="rp-sec"><h2>Matchup</h2>
-      ${m.matchups.length ? `<div class="table-wrap"><table class="rp-table">
-        <thead><tr><th>Avversario</th><th class="num">Match</th><th class="num">Vinti–Persi</th><th>Win rate</th><th>Commento</th></tr></thead>
-        <tbody>${rows}</tbody></table></div>` : `<p>Nessun avversario con match registrati.</p>`}
+      ${perGruppo}${m.matchups.length ? winTable("Avversario", m.matchups.map((x) => ({ name: x.arch.name, s: x.s }))) : `<p>Nessun avversario con match registrati.</p>`}
     </section>`;
     const foot = `<footer class="rp-foot">
       <p>Generato da Meta Tracker il ${esc(m.generated)}.</p>
@@ -226,6 +233,10 @@
     if (!m.n) { L.push("Nessun match con i filtri attuali."); return L.join("\n"); }
     L.push("*🔎 In breve*");
     sentencesBreve(m).forEach((s) => L.push(`• ${s}`));
+    if (m.groups.length) {
+      L.push("", "*🧩 Per gruppo*");
+      m.groups.forEach((g) => L.push(`• *${g.name}*: ${recStr(g.s)} (${pct(g.s.wr)}) · ${comento(g.s)[1]}`));
+    }
     L.push("", "*⚔️ Matchup*");
     if (!m.matchups.length) L.push("• Nessun dato");
     m.matchups.forEach((x) => L.push(`• *${x.arch.name}*: ${recStr(x.s)} (${pct(x.s.wr)}) · ${comento(x.s)[1]}`));
