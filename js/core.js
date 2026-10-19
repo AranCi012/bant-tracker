@@ -581,11 +581,15 @@
       <ul class="versions">${S.decks.map((d) => {
         const s = stats(S.matches.filter((m) => m.deck_id === d.id));
         return `<li class="version" data-edit-deck="${esc(d.id)}"><span><b>${esc(d.name)}</b><br><span class="muted small">${S.decklists.filter((v) => v.deck_id === d.id).length} versioni lista</span></span>
-          <span class="num small">${s.n ? `${pct(s.wr)} <span class="muted">${record(s)}</span>` : `<span class="muted">nessun match</span>`}</span></li>`;
+          <span class="inline deck-row-r"><span class="num small">${s.n ? `${pct(s.wr)} <span class="muted">${record(s)}</span>` : `<span class="muted">nessun match</span>`}</span>
+            <button type="button" class="btn sm" data-edit-btn="${esc(d.id)}">Modifica</button>
+            <button type="button" class="btn sm danger" data-del-deck="${esc(d.id)}">Elimina</button></span></li>`;
       }).join("")}</ul>
       <div class="row-actions"><button class="btn primary" id="add-deck">+ Nuovo mazzo</button></div>`, (body) => {
       $("#add-deck", body).onclick = () => editDeckEntity(null);
       $$("[data-edit-deck]", body).forEach((li) => (li.onclick = () => editDeckEntity(S.decks.find((d) => d.id === li.dataset.editDeck))));
+      $$("[data-edit-btn]", body).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); editDeckEntity(S.decks.find((d) => d.id === b.dataset.editBtn)); }));
+      $$("[data-del-deck]", body).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); deleteDeckFlow(S.decks.find((d) => d.id === b.dataset.delDeck)); }));
     });
   }
   function editDeckEntity(d) {
@@ -598,18 +602,14 @@
           <input name="cover_card" value="${esc(d ? d.cover_card || "" : "")}" placeholder="es. Phelia, Exuberant Shepherd — vuoto = scelta automatica"></label>
         <label class="field full">Note <textarea name="notes" rows="3">${esc(d ? d.notes : "")}</textarea></label>
         <div class="row-actions full" style="justify-content:space-between">
-          <span>${d ? `<button type="button" class="btn danger" id="del-deck-ent"${used ? ` disabled title="Ha ${used} match"` : ""}>Elimina</button>` : ""}</span>
+          <span>${d ? `<button type="button" class="btn danger" id="del-deck-ent">Elimina</button>` : ""}</span>
           <span class="inline"><button type="button" class="btn" id="back-decks">Indietro</button><button class="btn primary">Salva</button></span>
         </div>
-        ${d && used ? `<p class="full small muted" style="margin:0">Non eliminabile: ha ${used} match collegati (puoi rinominarlo).</p>` : ""}
       </form>`, (body) => {
       const f = $("#deck-ent", body);
       $("#back-decks", body).onclick = () => (S.decks.length ? manageDecks() : closeModal());
       const del = $("#del-deck-ent", body);
-      if (del) del.onclick = () => {
-        if (!confirm(`Eliminare il mazzo “${d.name}” con tutte le sue liste e guide di sideboard?`)) return;
-        guard(async () => { await DB.remove("decks", d.id); if (!REMOTE) await localCascadeDeck(d.id); await reload(); closeModal(); renderDeckSwitch(); route(); toast("Mazzo eliminato"); });
-      };
+      if (del) del.onclick = () => deleteDeckFlow(d);
       f.onsubmit = (e) => {
         e.preventDefault();
         const name = f.name.value.trim();
@@ -621,6 +621,52 @@
           await reload(); closeModal(); renderDeckSwitch(); route(); toast(d ? "Mazzo aggiornato" : `Ora stai guardando “${name}”`);
         });
       };
+    });
+  }
+  // ---- Eliminazione di un mazzo, con backup obbligatorio ----------------
+  // Prima di cancellare scarica un file JSON con tutti i dati del mazzo (match, liste, guide + archetipi e gruppi
+  // per poterlo reimportare da Storico -> Importa backup). Serve scrivere il nome del mazzo per confermare.
+  function deckBackup(d) {
+    return {
+      version: 2, backup_of_deck: d.name, created_at: now(),
+      decks: [d],
+      archetypes: S.archetypes, archetype_groups: S.groups,
+      decklists: S.decklists.filter((v) => v.deck_id === d.id),
+      matches: S.matches.filter((m) => m.deck_id === d.id),
+      sideboard_guides: S.guides.filter((g) => g.deck_id === d.id),
+    };
+  }
+  function deleteDeckFlow(d) {
+    if (!d) return;
+    const nM = S.matches.filter((m) => m.deck_id === d.id).length;
+    const nV = S.decklists.filter((v) => v.deck_id === d.id).length;
+    const nG = S.guides.filter((g) => g.deck_id === d.id).length;
+    const last = S.decks.length === 1;
+    openModal(`
+      <h2>Elimina “${esc(d.name)}”</h2>
+      <p>Verranno cancellati definitivamente: <b>${nM} match</b>, <b>${nV} ${nV === 1 ? "versione" : "versioni"} della lista</b> e <b>${nG} ${nG === 1 ? "guida" : "guide"} di sideboard</b> di questo mazzo. Gli archetipi avversari e gli altri mazzi non vengono toccati.</p>
+      <p class="small">🛟 Prima di eliminare viene <b>scaricato automaticamente un backup</b> (file .json) con tutti questi dati: si può reimportare da <b>Storico → Importa backup</b>.</p>
+      ${last ? `<p class="small warn">È il vostro unico mazzo: dopo l'eliminazione ne dovrete creare uno nuovo.</p>` : ""}
+      <label class="field">Per confermare scrivi il nome del mazzo <input id="del-confirm" autocomplete="off" placeholder="${esc(d.name)}"></label>
+      <div class="row-actions" style="justify-content:space-between">
+        <button type="button" class="btn" id="del-back">Annulla</button>
+        <button type="button" class="btn danger" id="del-go" disabled>Scarica backup ed elimina</button>
+      </div>`, (body) => {
+      const inp = $("#del-confirm", body), go = $("#del-go", body);
+      inp.oninput = () => { go.disabled = inp.value.trim().toLowerCase() !== d.name.trim().toLowerCase(); };
+      inp.focus();
+      $("#del-back", body).onclick = () => manageDecks();
+      go.onclick = () => guard(async () => {
+        go.disabled = true; go.textContent = "Elimino…";
+        const file = `backup-mazzo-${d.name.replace(/[^\w-]+/g, "_")}-${today()}.json`;
+        download(file, JSON.stringify(deckBackup(d), null, 2), "application/json");
+        // i match bloccano l'eliminazione del mazzo (vincolo nel database): si cancellano prima, poi il mazzo (liste e guide vanno via con lui)
+        for (const m of S.matches.filter((x) => x.deck_id === d.id)) await DB.remove("matches", m.id);
+        await DB.remove("decks", d.id);
+        if (!REMOTE) await localCascadeDeck(d.id);
+        await reload(); closeModal(); renderDeckSwitch(); route();
+        toast(`“${d.name}” eliminato · backup scaricato: ${file}`);
+      }).finally(() => { if (go.isConnected) { go.textContent = "Scarica backup ed elimina"; } });
     });
   }
   async function localCascadeDeck(id) {
