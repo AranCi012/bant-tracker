@@ -84,11 +84,11 @@
           <button class="btn sm ghost" data-down="${esc(c.id)}" aria-label="Sposta giù"${i === S.groups.length - 1 ? " disabled" : ""}>↓</button>
           <button class="btn sm" data-rename="${esc(c.id)}">Rinomina</button>
           <button class="btn sm danger" data-delgroup="${esc(c.id)}">Elimina</button></div>` : "";
-      const chips = c.archs.length ? c.archs.map((a) => `<span class="gp-chip">
+      const chips = c.archs.length ? c.archs.map((a) => `<span class="gp-chip"${edit ? ` data-drag-aid="${esc(a.id)}" title="Trascinalo in un altro gruppo"` : ""}>
           <a class="gp-cname" href="#matchup/${encodeURIComponent(a.id)}" title="Statistiche contro ${esc(a.name)}">${esc(a.name)}</a><small>${cnt(ms, a.id)}</small>
           ${edit && S.groups.length ? `<select class="gp-move" data-edit data-move="${esc(a.id)}" aria-label="Sposta ${esc(a.name)} in un altro gruppo">${groupOpts("__ph", "⇄", c.id)}</select>` : ""}
-        </span>`).join("") : `<span class="muted small">${c.group ? "Nessun archetipo in questo gruppo." : "Tutti gli archetipi hanno un gruppo."}</span>`;
-      return `<section class="card gp-card${c.group ? "" : " gp-none"}">
+        </span>`).join("") : `<span class="muted small">${c.group ? (edit ? "Trascina qui un archetipo." : "Nessun archetipo in questo gruppo.") : "Tutti gli archetipi hanno un gruppo."}</span>`;
+      return `<section class="card gp-card${c.group ? "" : " gp-none"}" data-drop-gid="${esc(c.id)}">
         <div class="gp-head">
           <div class="gp-title"><a class="gp-name" href="#matchup" data-gfilter="${esc(c.id)}" title="Apri le statistiche di tutto il gruppo">${esc(c.name)}</a>
             <span class="muted small">${c.archs.length} archetip${c.archs.length === 1 ? "o" : "i"}</span></div>
@@ -121,7 +121,7 @@
       <div class="page-head"><h1>Gruppi di avversari</h1>
         <span class="inline"><button class="btn" id="gp-suggest" data-edit>✨ Suggerisci</button><button class="btn primary" id="gp-new" data-edit>+ Nuovo gruppo</button></span></div>
       <div class="seg opp-switch"><a href="#opponents">Mazzi</a><a href="#players">Giocatori</a><a href="#groups" class="on">Gruppi</a></div>
-      <p class="muted" style="margin-top:-6px">Raggruppa gli archetipi in famiglie più grandi (Combo, Control…) senza unirli: i match restano sul loro archetipo. Le statistiche sono quelle di <b>${esc(A.currentDeck().name)}</b>${fActive ? " con i filtri attivi" : ""}.${edit ? "" : " Sola lettura."}</p>
+      <p class="muted" style="margin-top:-6px">Raggruppa gli archetipi in famiglie più grandi (Combo, Control…) senza unirli: i match restano sul loro archetipo. Le statistiche sono quelle di <b>${esc(A.currentDeck().name)}</b>${fActive ? " con i filtri attivi" : ""}.${edit ? " <b>Trascina un archetipo</b> sulla card del suo gruppo (su telefono: tieni premuto e trascina)." : " Sola lettura."}</p>
       ${fActive ? `<div class="filter-warn" role="status">🔎 Filtri attivi: le statistiche dei gruppi li rispettano. <button class="btn sm" id="gp-fr">Mostra tutti</button></div>` : ""}
       ${S.groups.length ? "" : `<div class="card empty-state"><p>Non c'è ancora nessun gruppo${edit ? "." : ", e in sola lettura non puoi crearli."}</p>
         ${edit ? `<button class="btn primary" id="gp-defaults">Crea i gruppi predefiniti (${esc(A.DEFAULT_GROUPS.join(", "))})</button>` : ""}</div>`}
@@ -153,6 +153,7 @@
       A.closeModal(); await refresh(root); A.toast(`Gruppo “${name}” creato`);
     }));
     $("#gp-suggest", root).onclick = () => suggestModal(root);
+    enableDrag(root);
 
     $$("[data-rename]", root).forEach((b) => (b.onclick = () => {
       const g = A.groupById(b.dataset.rename);
@@ -212,6 +213,89 @@
       const g = A.groupById(to), n = sel.size;
       assign(root, [...sel], to, `${n} archetip${n === 1 ? "o" : "i"} → ${g ? g.name : "senza gruppo"}`);
     };
+  }
+
+  // ---- Drag & drop: trascina un archetipo (chip) sulla card di un gruppo -----------------------
+  // Mouse: basta trascinare. Touch: tieni premuto ~0,3 s, poi trascina (così lo scorrimento della pagina resta normale).
+  function enableDrag(root) {
+    let st = null; // stato del trascinamento in corso
+    const cardAt = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest("[data-drop-gid]"); };
+    const cleanup = () => {
+      if (!st) return;
+      clearTimeout(st.timer);
+      if (st.ghost) st.ghost.remove();
+      st.chip.classList.remove("gp-dragging");
+      $$(".gp-drop", root).forEach((c) => c.classList.remove("gp-drop"));
+      document.body.classList.remove("gp-dragmode");
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("touchmove", blockScroll, { passive: false });
+      st = null;
+    };
+    const blockScroll = (e) => { if (st && st.active) e.preventDefault(); };
+    const begin = () => {
+      st.active = true;
+      const r = st.chip.getBoundingClientRect();
+      st.dx = st.x - r.left; st.dy = st.y - r.top;
+      st.ghost = st.chip.cloneNode(true);
+      st.ghost.classList.add("gp-ghost");
+      st.ghost.style.width = r.width + "px";
+      document.body.appendChild(st.ghost);
+      st.chip.classList.add("gp-dragging");
+      document.body.classList.add("gp-dragmode");
+      if (navigator.vibrate && st.touch) navigator.vibrate(15);
+      place(st.x, st.y);
+    };
+    const place = (x, y) => {
+      st.ghost.style.transform = `translate(${x - st.dx}px, ${y - st.dy}px)`;
+      const over = cardAt(x, y);
+      $$(".gp-drop", root).forEach((c) => c !== over && c.classList.remove("gp-drop"));
+      if (over && over.dataset.dropGid !== st.from) over.classList.add("gp-drop");
+      // scorrimento automatico vicino ai bordi
+      if (y < 70) window.scrollBy(0, -14); else if (y > innerHeight - 70) window.scrollBy(0, 14);
+    };
+    function onMove(e) {
+      if (!st || e.pointerId !== st.pid) return;
+      const moved = Math.hypot(e.clientX - st.x, e.clientY - st.y);
+      if (!st.active) {
+        if (st.touch) { if (moved > 8) cleanup(); return; } // sul touch serve la pressione lunga
+        if (moved < 6) return;
+        begin();
+      }
+      e.preventDefault();
+      place(e.clientX, e.clientY);
+    }
+    function onUp(e) {
+      if (!st || e.pointerId !== st.pid) return;
+      const wasActive = st.active, from = st.from, aid = st.aid;
+      const over = wasActive ? cardAt(e.clientX, e.clientY) : null;
+      cleanup();
+      if (!wasActive) return;
+      // il rilascio non deve "cliccare" il link del nome
+      const stopClick = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
+      root.addEventListener("click", stopClick, { capture: true, once: true });
+      setTimeout(() => root.removeEventListener("click", stopClick, { capture: true }), 50);
+      if (!over || over.dataset.dropGid === from) return;
+      const to = over.dataset.dropGid, a = A.archById(aid), g = to === "__none" ? null : A.groupById(to);
+      assign(root, [aid], g ? g.id : null, `“${a ? a.name : "?"}” → ${g ? g.name : "Senza gruppo"}`);
+    }
+    function onCancel() { cleanup(); }
+    $$("[data-drag-aid]", root).forEach((chip) => {
+      chip.addEventListener("pointerdown", (e) => {
+        if (e.button > 0 || e.target.closest("select")) return; // il menu ⇄ funziona come prima
+        cleanup();
+        const card = chip.closest("[data-drop-gid]");
+        st = { chip, aid: chip.dataset.dragAid, from: card ? card.dataset.dropGid : "", pid: e.pointerId, x: e.clientX, y: e.clientY, touch: e.pointerType !== "mouse", active: false };
+        if (st.touch) st.timer = setTimeout(() => { if (st && !st.active) begin(); }, 300);
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+        window.addEventListener("pointercancel", onCancel);
+        window.addEventListener("touchmove", blockScroll, { passive: false });
+      });
+      chip.addEventListener("dragstart", (e) => e.preventDefault()); // niente drag nativo di link/testo
+      chip.addEventListener("contextmenu", (e) => { if (st && st.touch) e.preventDefault(); }); // niente menu sulla pressione lunga
+    });
   }
 
   function nameModal(title, initial, onSave, selfId) {

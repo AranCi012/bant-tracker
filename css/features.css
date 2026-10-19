@@ -216,3 +216,9 @@ mark.ev-ign { background: transparent; text-decoration: line-through; opacity: .
 .opp-hist:empty { display: none; }
 .oh-card { padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .oh-arch { white-space: nowrap; margin-right: 6px; }
+/* Drag & drop archetipi -> gruppi */
+.gp-chip[data-drag-aid] { cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.gp-chip.gp-dragging { opacity: .35; }
+.gp-ghost { position: fixed; left: 0; top: 0; z-index: 1000; pointer-events: none; cursor: grabbing; box-shadow: var(--shadow-lift, 0 10px 30px rgba(0,0,0,.25)); background: var(--surface); }
+.gp-card.gp-drop { outline: 2px dashed var(--accent); outline-offset: -2px; background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+body.gp-dragmode, body.gp-dragmode * { cursor: grabbing !important; }
