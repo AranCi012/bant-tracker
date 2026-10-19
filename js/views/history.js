@@ -22,7 +22,7 @@
     A.bindMatchRows(root);
     A.bindDemo(root);
     $("#exp-csv", root).onclick = () => exportCSV(ms);
-    $("#exp-json", root).onclick = () => A.download(`meta-backup-${today()}.json`, JSON.stringify({ version: 2, decks: S.decks, archetypes: S.archetypes, decklists: S.decklists, matches: S.matches, sideboard_guides: S.guides }, null, 2), "application/json");
+    $("#exp-json", root).onclick = () => A.download(`meta-backup-${today()}.json`, JSON.stringify({ version: 2, decks: S.decks, archetypes: S.archetypes, decklists: S.decklists, matches: S.matches, sideboard_guides: S.guides, archetype_groups: S.groups }, null, 2), "application/json");
     if ($("#imp-json", root)) $("#imp-json", root).onchange = (e) => A.guard(() => importJSON(e.target.files[0]));
   }
 
