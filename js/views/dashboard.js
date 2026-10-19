@@ -12,6 +12,8 @@
     const s = A.stats(ms);
     const groups = A.byArchetype(ms);
     const deck = A.currentDeck();
+    // Card "per gruppo" solo se almeno un archetipo appartiene a un gruppo
+    const withGroups = A.S.groups.length > 0 && A.S.archetypes.some((a) => a.group_id && A.groupById(a.group_id));
     root.innerHTML = `
       ${heroHTML(deck, s, ms, all)}
       ${A.filtersHTML()}
@@ -34,12 +36,13 @@
         <div id="trend"></div>
       </div>
       <div class="grid g2" style="margin-top:16px">
+        ${withGroups ? groupCard(A.byGroup(ms)) : ""}
         <div class="card">
           <div class="section-head"><h2>Win rate per matchup</h2><a href="#matchup" class="small">Matrice completa →</a></div>
           ${wrBars(groups)}
           <div class="legend"><span>Barra = distanza da 50%</span><span>sbiadito = meno di ${LOW_N} match</span></div>
         </div>
-        <div class="card">
+        <div class="card"${withGroups ? ` style="grid-column:1 / -1"` : ""}>
           <div class="section-head"><h2>Chi incontriamo</h2><span class="muted small">% dei match</span></div>
           ${shareBars(groups, ms.length)}
         </div>
@@ -58,8 +61,29 @@
     A.bindFilters(root, () => viewDashboard(root));
     A.bindDemo(root);
     A.bindMatchRows(root);
+    // Clic su una barra di gruppo: imposta il filtro gruppo e ridisegna la pagina
+    A.$$("[data-gset]", root).forEach((b) => (b.onclick = () => { S.filters.group = b.dataset.gset; A.lsSet("filters", S.filters); viewDashboard(root); }));
     if (ms.length) trendChart($("#trend", root), A.chrono(ms));
     paintHero(root, deck);
+  }
+
+  // ---- Win rate per gruppo: stessa grafica di "Win rate per matchup", una barra per gruppo
+  function groupCard(list) {
+    const rows = [...list].sort((a, b) => (a.id === "__none") - (b.id === "__none") || b.s.wr - a.s.wr || b.s.n - a.s.n);
+    return `<div class="card">
+      <div class="section-head"><h2>Win rate per gruppo</h2><span class="muted small">Clicca per filtrare</span></div>
+      ${rows.length ? `<div class="bars">${rows.map((g) => {
+        const d = g.s.wr - 0.5, w = Math.abs(d) * 100;
+        const cls = (d >= 0 ? "pos" : "neg") + (g.s.n < LOW_N ? " low" : "");
+        const style = d >= 0 ? `left:50%;width:${w}%` : `left:${50 - w}%;width:${w}%`;
+        const tipHtml = `<b>${esc(g.name)}</b>` + A.ttRows([["Match", `${A.record(g.s)} (${pct(g.s.wr)})`], ["Game", pct(g.s.gwr)], ["Pre / Post", `${pct(g.s.pre)} / ${pct(g.s.post)}`], ["IC 95%", g.s.ci ? `${pct(g.s.ci[0])}–${pct(g.s.ci[1])}` : "—"], ["Archetipi", String(g.archIds.length)]]);
+        return `<button type="button" class="bar-row gs-bar-btn" data-gset="${esc(g.id)}" data-tip="${esc(tipHtml)}">
+          <span class="name">${esc(g.name)}<span class="rec">${A.record(g.s)}</span></span>
+          <span class="track"><span class="axis"></span><span class="fill ${cls}" style="${style};${w < 0.5 ? "min-width:2px" : ""}"></span></span>
+          <span class="val">${pct(g.s.wr)} <span class="muted small">(${g.s.n})</span></span></button>`;
+      }).join("")}</div>` : `<p class="muted">—</p>`}
+      <div class="legend"><span>Barra = distanza da 50%</span><span>sbiadito = meno di ${LOW_N} match</span></div>
+    </div>`;
   }
 
   // ---- Hero: nome del mazzo + win rate, sull'illustrazione della carta di copertina

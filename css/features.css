@@ -166,3 +166,53 @@ mark.ev-ign { background: transparent; text-decoration: line-through; opacity: .
 .sbd-sum { margin-top: 12px; }
 .sbd-sum summary { cursor: pointer; padding: 4px 0; }
 @media print { .sbo-bar, .sbo-go { display: none !important; } .sbo-pill { background: #fff !important; color: #000 !important; border: 1px solid #000; } .sbo-chip { background: #fff !important; color: #000 !important; border: 1px solid #999; } }
+
+/* ---------- Gruppi di archetipi (Combo, Control, ...) ---------- */
+.grp-chip { display: inline-block; vertical-align: middle; margin-left: 4px; padding: 0 7px; border-radius: 999px; font-size: .7rem; font-weight: 700; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.gp-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); align-items: start; margin-top: 12px; }
+.gp-grid > .card + .card { margin-top: 0; }
+.gp-card.gp-none { border-style: dashed; }
+.gp-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; margin-bottom: 10px; }
+.gp-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-width: 0; }
+.gp-name { font-size: 1.1rem; font-weight: 700; color: var(--text); text-decoration: none; }
+.gp-name:hover { color: var(--accent); text-decoration: underline; }
+.gp-stat { display: flex; align-items: center; gap: 6px; }
+.gp-tools { display: flex; flex-wrap: wrap; gap: 4px; width: 100%; }
+.gp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.gp-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 4px 2px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); font-size: .88rem; }
+.gp-chip small { color: var(--text-2); font-variant-numeric: tabular-nums; }
+.gp-cname { color: var(--text); text-decoration: none; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gp-cname:hover { color: var(--accent); text-decoration: underline; }
+.gp-move { width: 44px; min-height: 30px; padding: 0 2px; border-radius: 999px; font-size: .85rem; cursor: pointer; background: var(--surface); }
+.gp-bulk { margin-top: 12px; }
+.gp-bulk > summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.gp-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+.gp-bar-move { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; flex-wrap: wrap; }
+.gp-bar-move select { min-width: 0; max-width: 100%; }
+.gp-rows { display: flex; flex-direction: column; max-height: 420px; overflow-y: auto; border-top: 1px solid var(--border); }
+.gp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(110px, 160px); align-items: center; gap: 10px; padding: 4px 2px; border-bottom: 1px solid var(--border); }
+.gp-row.none { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.gp-pick { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 36px; cursor: pointer; }
+.gp-rname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gp-row select { min-width: 0; width: 100%; }
+.gp-sug { display: flex; flex-direction: column; max-height: 55vh; overflow-y: auto; border-top: 1px solid var(--border); }
+.gp-sug-row { display: flex; align-items: center; gap: 8px; padding: 8px 2px; min-height: 44px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.gp-sug-row .gp-rname { flex: 1; }
+.gp-arrow { color: var(--text-3); }
+@media (max-width: 560px) {
+  .gp-grid { grid-template-columns: minmax(0, 1fr); }
+  .gp-row { grid-template-columns: minmax(0, 1fr) minmax(104px, 42%); }
+  .gp-row > .num { display: none; }
+  .gp-bar-move { margin-left: 0; width: 100%; }
+  .gp-bar-move select { flex: 1; }
+}
+.gp-pick input, .gp-sug-row input { width: auto; flex-shrink: 0; padding: 0; }
+.gp-bar .btn { width: auto; }
+.gp-bulk > summary { list-style: none; }
+.gp-bulk > summary::-webkit-details-marker { display: none; }
+.gp-bulk > summary::before { content: "▸"; color: var(--text-2); }
+.gp-bulk[open] > summary::before { content: "▾"; }
+/* Avversario già incontrato (form partita) */
+.opp-hist:empty { display: none; }
+.oh-card { padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.oh-arch { white-space: nowrap; margin-right: 6px; }

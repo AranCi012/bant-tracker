@@ -10,14 +10,15 @@
     const count = (id) => ms.filter((m) => m.archetype_id === id).length;
     root.innerHTML = `
       <div class="page-head"><h1>Avversari</h1><button class="btn primary" id="add-arch" data-edit>+ Archetipo</button></div>
-      <div class="seg opp-switch"><a href="#opponents" class="on">Mazzi</a><a href="#players">Giocatori</a></div>
+      <div class="seg opp-switch"><a href="#opponents" class="on">Mazzi</a><a href="#players">Giocatori</a><a href="#groups">Gruppi</a></div>
       <p class="muted" style="margin-top:-6px">Gli archetipi che incontrate (validi per tutti i vostri mazzi). Le statistiche sono quelle di <b>${esc(A.currentDeck().name)}</b>. ${canEdit() ? "Clicca per modificarli." : "Clicca per vedere le statistiche."}</p>
       <div class="opp-list">${[...S.archetypes].sort((x, y) => count(y.id) - count(x.id) || x.name.localeCompare(y.name)).map((a) => {
         const s = A.stats(ms.filter((m) => m.archetype_id === a.id));
         const g = A.guideFor(a.id);
         const hasGuide = g && (g.play_in || g.play_out || g.draw_in || g.draw_out || g.notes);
+        const gr = A.groupOf(a.id);
         return `<div class="card opp" data-arch="${esc(a.id)}">
-          <div class="top"><span class="name">${esc(a.name)}</span>
+          <div class="top"><span class="name">${esc(a.name)}${gr ? ` <span class="grp-chip" title="Gruppo">${esc(gr.name)}</span>` : ""}</span>
             <span class="num small">${s.n ? `<b>${pct(s.wr)}</b> <span class="muted">${A.record(s)}</span>` : `<span class="muted">nessun match</span>`}</span></div>
           <div class="plan">${hasGuide ? "✓ Guida di sideboard" : `<span style="opacity:.7">Nessuna guida di sideboard</span>`}${a.notes ? ` · ${esc(a.notes)}` : ""}</div>
         </div>`;
@@ -34,6 +35,8 @@
       <form id="arch-form" class="form-grid">
         <label class="field full">Nome <input name="name" value="${esc(a?.name || "")}" required></label>
         <label class="field full">Note sull'avversario <textarea name="notes" rows="4" placeholder="Carte chiave dell'avversario, come mulligare, cosa temere…">${esc(a?.notes || "")}</textarea></label>
+        ${S.groups.length ? `<label class="field full">Gruppo <span class="muted" style="font-weight:400">(Combo, Control… serve solo a raggruppare le statistiche)</span>
+          <select name="group_id"><option value="">— nessuno —</option>${S.groups.map((g) => `<option value="${esc(g.id)}"${a && a.group_id === g.id ? " selected" : ""}>${esc(g.name)}</option>`).join("")}</select></label>` : ""}
         ${isEdit ? `<div class="field full merge-box"><span>Unisci in un altro archetipo <span class="muted" style="font-weight:400">(i match e le guide passano lì, questo viene eliminato)</span></span>
           <div class="inline"><select id="merge-to"><option value="">— scegli —</option>${S.archetypes.filter((x) => x.id !== a.id).map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("")}</select>
           <button type="button" class="btn" id="merge-btn">Unisci</button></div></div>` : ""}
@@ -64,6 +67,7 @@
         const name = A.archName(f.name.value);
         if (S.archetypes.some((x) => x.name.toLowerCase() === name.toLowerCase() && x.id !== a?.id)) { A.toast("Esiste già un archetipo con questo nome"); return; }
         const row = { name, notes: f.notes.value.trim() };
+        if (f.group_id) row.group_id = f.group_id.value || null;
         A.guard(async () => {
           if (isEdit) await DB.update("archetypes", a.id, row); else await DB.insert("archetypes", { ...row, sideboard_plan: "" });
           await A.reload(); A.closeModal(); A.toast("Salvato"); after();
@@ -86,7 +90,10 @@
       }
     }
     const notes = [to.notes, from.notes && `(da ${from.name}) ${from.notes}`].filter((s) => (s || "").trim()).join("\n");
-    if (notes !== (to.notes || "")) await DB.update("archetypes", to.id, { notes });
+    const patch = {};
+    if (notes !== (to.notes || "")) patch.notes = notes;
+    if (!to.group_id && from.group_id) patch.group_id = from.group_id; // il gruppo non si perde nell'unione
+    if (Object.keys(patch).length) await DB.update("archetypes", to.id, patch);
     await DB.remove("archetypes", from.id);
     await A.reload();
   }

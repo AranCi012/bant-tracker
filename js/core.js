@@ -37,6 +37,7 @@
     "Death and Taxes", "Lands", "Eldrazi", "Elves / Cradle", "Painter", "Affinity / Saga", "Initiative",
     "Mystic Forge", "Control (4c / Beanstalk)", "Red Prison", "Bant mirror", "Altro",
   ];
+  const DEFAULT_GROUPS = ["Combo", "Control", "Tempo", "Aggro", "Midrange", "Prison", "Big mana"];
   const EVENTS = ["MTGO League", "MTGO Challenge", "Torneo locale", "Torneo grande", "Playtest", "Altro"];
 
   // ---- Liste di carte ("4 Brainstorm") --------------------------------
@@ -77,7 +78,8 @@
       if (!lsGet("db_archetypes")) {
         lsSet("db_archetypes", DEFAULT_ARCHETYPES.map((name) => ({ id: uid(), name, sideboard_plan: "", notes: "", created_at: now() })));
       }
-      for (const t of TABLES) if (!lsGet("db_" + t)) lsSet("db_" + t, []);
+      for (const t of [...TABLES, "archetype_groups"]) if (!lsGet("db_" + t)) lsSet("db_" + t, []);
+      if (!lsGet("db_archetype_groups", []).length) lsSet("db_archetype_groups", DEFAULT_GROUPS.map((name, i) => ({ id: uid(), name, sort: i + 1, created_at: now() })));
       // Migrazione locale v1 -> v2 (come supabase/migrations/002): mazzo di default "Bant"
       let decks = lsGet("db_decks", []);
       if (!decks.length) { decks = [{ id: uid(), name: "Bant", notes: "", created_at: now() }]; lsSet("db_decks", decks); }
@@ -168,15 +170,18 @@
   // =====================================================================
   //  State
   // =====================================================================
+  // group: id di un gruppo di archetipi, "__none" = mazzi senza gruppo
+  const emptyFilters = () => ({ player: "", version: "", event: "", group: "", from: "", to: "" });
   const S = {
     decks: [],        // i NOSTRI mazzi (Bant, ...)
     archetypes: [],   // mazzi avversari (condivisi fra tutti i nostri mazzi)
     decklists: [],    // versioni delle liste (di tutti i mazzi), più recenti prima
     matches: [],      // tutti i match (di tutti i mazzi)
     guides: [],       // sideboard_guides (per coppia mazzo × archetipo)
+    groups: [],       // archetype_groups: famiglie di archetipi (Combo, Control, ...)
     deckId: lsGet("deckId", ""),
     me: lsGet("me", ""),
-    filters: { player: "", version: "", event: "", from: "", to: "" }, // ogni visita parte da "tutti i match"
+    filters: emptyFilters(), // ogni visita parte da "tutti i match"
     deckSel: null,
     access: "edit",   // "edit" | "view"
     ready: false,
@@ -190,6 +195,9 @@
     S.decklists = d.sort((x, y) => (y.created_at || "").localeCompare(x.created_at || ""));
     S.matches = m;
     S.guides = g;
+    // I gruppi arrivano con la migrazione 004: se il database non l'ha ancora, l'app funziona lo stesso senza.
+    S.groups = (await DB.all("archetype_groups").catch(() => [])).sort((x, y) => (x.sort || 0) - (y.sort || 0) || x.name.localeCompare(y.name));
+    if (S.filters.group && S.filters.group !== "__none" && !S.groups.some((x) => x.id === S.filters.group)) S.filters.group = "";
     if (!S.decks.some((x) => x.id === S.deckId)) setDeck(S.decks[0] ? S.decks[0].id : "", true);
   }
 
@@ -305,9 +313,25 @@
       (!f.player || m.player === f.player) &&
       (!f.version || m.decklist_id === f.version) &&
       (!f.event || m.event === f.event) &&
+      (!f.group || (f.group === "__none" ? !groupOf(m.archetype_id) : (groupOf(m.archetype_id) || {}).id === f.group)) &&
       (!f.from || (m.played_at || "") >= f.from) &&
       (!f.to || (m.played_at || "") <= f.to));
   }
+  // ---- Gruppi di archetipi --------------------------------------------
+  const groupById = (id) => S.groups.find((g) => g.id === id) || null;
+  const groupOf = (archId) => { const a = archById(archId); return a && a.group_id ? groupById(a.group_id) : null; };
+  // Match raggruppati per gruppo: [{ id ("__none" = senza gruppo), group, name, list, s, archIds }]
+  function byGroup(ms) {
+    const g = new Map();
+    for (const m of ms) {
+      const gr = groupOf(m.archetype_id), id = gr ? gr.id : "__none";
+      if (!g.has(id)) g.set(id, { id, group: gr, name: gr ? gr.name : "Senza gruppo", list: [], archIds: new Set() });
+      const e = g.get(id); e.list.push(m); e.archIds.add(m.archetype_id);
+    }
+    return [...g.values()].map((e) => ({ ...e, archIds: [...e.archIds], s: stats(e.list) }))
+      .sort((a, b) => (a.id === "__none") - (b.id === "__none") || b.s.n - a.s.n || a.name.localeCompare(b.name));
+  }
+
   function byArchetype(ms) {
     const g = new Map();
     for (const m of ms) { if (!g.has(m.archetype_id)) g.set(m.archetype_id, []); g.get(m.archetype_id).push(m); }
@@ -443,6 +467,7 @@
       <select data-f="player" aria-label="Giocatore">${opt("", "Tutti i giocatori", f.player)}${players().map((p) => opt(p, p, f.player)).join("")}</select>
       <select data-f="version" aria-label="Versione lista">${opt("", "Tutte le versioni lista", f.version)}${versions().map((d) => opt(d.id, d.name, f.version)).join("")}</select>
       <select data-f="event" aria-label="Evento">${opt("", "Tutti gli eventi", f.event)}${EVENTS.map((e) => opt(e, e, f.event)).join("")}</select>
+      ${S.groups.length ? `<select data-f="group" aria-label="Gruppo avversario">${opt("", "Tutti i gruppi", f.group)}${S.groups.map((g) => opt(g.id, g.name, f.group)).join("")}${opt("__none", "Senza gruppo", f.group)}</select>` : ""}
       <label class="small muted">dal <input type="date" data-f="from" value="${esc(f.from)}"></label>
       <label class="small muted">al <input type="date" data-f="to" value="${esc(f.to)}"></label>
       ${active ? `<button class="btn ghost sm chip-reset" id="f-reset">✕ Azzera filtri</button>` : ""}
@@ -452,9 +477,9 @@
   function bindFilters(root, rerender) {
     $$("[data-f]", root).forEach((el) => (el.onchange = () => { S.filters[el.dataset.f] = el.value; lsSet("filters", S.filters); rerender(); }));
     const r2 = $("#f-reset2", root);
-    if (r2) r2.onclick = () => { S.filters = { player: "", version: "", event: "", from: "", to: "" }; lsSet("filters", S.filters); rerender(); };
+    if (r2) r2.onclick = () => { S.filters = emptyFilters(); lsSet("filters", S.filters); rerender(); };
     const r = $("#f-reset", root);
-    if (r) r.onclick = () => { S.filters = { player: "", version: "", event: "", from: "", to: "" }; lsSet("filters", S.filters); rerender(); };
+    if (r) r.onclick = () => { S.filters = emptyFilters(); lsSet("filters", S.filters); rerender(); };
   }
 
   function emptyState(msg) {
@@ -471,7 +496,7 @@
     if (!S.ready) return;
     const [name, arg] = (location.hash.replace("#", "") || "dashboard").split("/");
     const v = App.views[name] ? name : "dashboard";
-    const tab = { players: "opponents", report: "sideboard" }[v] || v;
+    const tab = { players: "opponents", groups: "opponents", report: "sideboard" }[v] || v;
     $$("#tabs a").forEach((a) => a.classList.toggle("active", a.dataset.view === tab));
     $("#fab").hidden = v === "add" || !canEdit();
     hideTip();
@@ -707,7 +732,7 @@
     $, $$, esc, lsGet, lsSet, uid, today, pct, fmtDate, titleName, archName,
     cardKey, parseList, countList, listMap, listToText,
     reload, currentDeck, setDeck, aliases, saveAliases, versions, versionById, activeVersion, deckMatches, guideFor, saveGuide,
-    archById, players, chrono,
+    archById, players, chrono, groupById, groupOf, byGroup, DEFAULT_GROUPS,
     gamesOf, matchResult, wilson, stats, record, filtered, byArchetype,
     wrColor, meter, coverCard, artUrl, toast, openModal, closeModal, showTip, hideTip, ttRows, guard, download, kpi,
     heatCell, heatLegend, confusionG1, matchTable, bindMatchRows,

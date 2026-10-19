@@ -134,7 +134,7 @@
         </div>`;
 
     root.innerHTML = `
-      <div class="pl-top"><nav class="seg" aria-label="Sezione avversari"><a href="#opponents">Mazzi</a><a href="#players" class="on" aria-current="page">Giocatori</a></nav></div>
+      <div class="pl-top"><nav class="seg" aria-label="Sezione avversari"><a href="#opponents">Mazzi</a><a href="#players" class="on" aria-current="page">Giocatori</a><a href="#groups">Gruppi</a></nav></div>
       <div class="page-head"><h1>Giocatori avversari <span class="muted" style="font-weight:500">· ${esc(A.currentDeck().name)}</span></h1></div>
       ${A.filtersHTML()}
       ${body}`;
