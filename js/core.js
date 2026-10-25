@@ -359,7 +359,7 @@
   let toastT;
   function toast(msg) {
     const t = $("#toast"); t.textContent = msg; t.hidden = false;
-    clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 2600);
+    clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), msg.length > 60 ? 6000 : 2600);
   }
   function openModal(html, onMount) {
     $("#modal-body").innerHTML = html; $("#modal").hidden = false;
@@ -762,6 +762,8 @@
       renderDeckSwitch();
       S.ready = true;
       route();
+      // Chi entra con il codice di sola visione lo deve capire subito (e sapere come cambiare)
+      if (!canEdit()) setTimeout(() => toast("👀 Sei entrato in sola lettura. Hai il codice per modificare? condividi → Entra con il codice"), 400);
     } catch (err) {
       console.error(err);
       $("#view").innerHTML = `<div class="card"><h2>Qualcosa non va</h2><p class="err">${esc(err.message || err)}</p>
