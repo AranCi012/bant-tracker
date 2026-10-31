@@ -7,6 +7,7 @@ Dashboard per registrare e analizzare le partite dei nostri mazzi di Magic (Lega
 - **Registra partita** (bottone `+ Partita`): archetipo avversario, G1/G2/G3 vinta/persa, play/draw (G2 e G3 si compilano da soli), sidata usata in G2 e G3 (precompilata dalla guida), giocatore, evento, versione lista, note.
 - **Dashboard**: in alto l'illustrazione della carta simbolo del mazzo (scelta automatica o da "Gestisci mazzi"), poi win rate di match e di game, pre-board e post-board, on the play e on the draw, andamento nel tempo, win rate per matchup, quanto spesso incontrate ogni archetipo, matrice "G1 → esito del match".
 - **Matchup**: matrice a colori matchup × situazione (match, game, G1, G2-3, play, draw), più la matrice giocatore × matchup. Cliccando un matchup vedi il dettaglio.
+- **Piano sideboard** (scheda Sideboard): per ogni matchup, on the play e on the draw, il piano consigliato calcolato dalle sidate registrate (quelle che hanno reso di più, con stima prudente quando i dati sono pochi: in quel caso si appoggia a lato opposto, gruppo di mazzi simili e guida scritta), la stima del win rate post-board accanto al risultato osservato, alternative, "Prova modifiche" con stima al volo, "Usa come guida", e il pannello "Il mazzo" con core, carte che cambiano e storia delle versioni. Si aggiorna da solo a ogni nuova sidata.
 - **Sideboard**: guida di sideboard per ogni matchup, separata on the play e on the draw; statistiche delle sidate (win rate post-board per piano e per singola carta, guida seguita o no); export in Markdown, CSV e stampa/PDF.
 - **Sidate dalle note**: se nelle note scrivi la sidata a parole tue ("side otd: +3 carpet +1 erode; -2 fow -2 fon", "2 stifle out, 2 priest in", "metti le wrath"), l'app la legge da sola: capisce abbreviazioni (fow, fon, stp), parole italiane, play/draw (otp/otd) e i soprannomi che le insegni ("spighe" = Up the Beanstalk), e ignora le carte dell'avversario. Propone, tu confermi o correggi. Per i match già registrati c'è la pagina Sideboard → "Sidate dalle note".
 - **Statistiche delle sidate**: per ogni matchup e separatamente on the play / on the draw, le carte **chiave** (entrano/escono quasi sempre), **di routine** e **occasionali**, la sidata tipica e un riassunto in frasi ("in media entrano 3,8 carte…").
@@ -99,6 +100,8 @@ css/mobile.css            stile per telefono (barra in basso, tabelle a schede)
 css/report.css            impaginazione del report e stampa A4
 js/core.js                database, stato, statistiche, router, gestione mazzi
 js/cards.js               immagini e dati delle carte (Scryfall)
+js/sbplan.js              motore del piano sideboard (core del mazzo, piano consigliato, stime)
+js/views/plan.js          pagina "Piano sideboard"
 js/sbstats.js             statistiche delle sidate (carte chiave/routine, sidata tipica, frasi)
 js/views/report.js        report leggibile (PDF, HTML, WhatsApp)
 js/notes.js               interprete delle note (trova le sidate scritte a mano)

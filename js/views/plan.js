@@ -103,6 +103,9 @@
   const dayOf = (d) => A.fmtDate(String(d || "").slice(0, 10));
   const shortDate = (d) => { const s = dayOf(d); return s ? s.slice(0, 5) : ""; }; // DD/MM
   const planLine = (p) => [(p.in || []).map((c) => `+${c.q} ${c.name}`).join(", "), (p.out || []).map((c) => `${MINUS}${c.q} ${c.name}`).join(", ")].filter(Boolean).join(" / ");
+  // Nomi brevi per i testi da copiare (WhatsApp): "Lavinia, Azorius Renegade" -> "Lavinia", "Snow-Covered Plains" -> "Snow Plains"
+  const shortName = (n) => String(n).split(",")[0].replace(/^Snow-Covered /i, "Snow ").trim();
+  const planLineShort = (p) => [(p.in || []).map((c) => `+${c.q} ${shortName(c.name)}`).join(", "), (p.out || []).map((c) => `${MINUS}${c.q} ${shortName(c.name)}`).join(", ")].filter(Boolean).join(" / ");
   const groupArchIds = (archId) => { const g = A.groupOf(archId); return g ? S.archetypes.filter((a) => a.group_id === g.id).map((a) => a.id) : []; };
   const recText = (c) => (c.nWith ? `${c.winsWith}/${c.nWith}` : "—");
 
@@ -345,8 +348,9 @@
   const confSuffix = (rec) => (rec.level === "guida" ? " (da guida)" : rec.confidence && rec.confidence !== "nessuna" ? ` (${CONF_LBL[rec.confidence]})` : "");
   function copyAllText() {
     const blocks = [];
-    for (const r of X.rows) {
-      const lines = SIDES.filter(([sd]) => hasPlan(r[sd].plan)).map(([sd, , ab]) => `${ab}: ${planLine(r[sd].plan)}${confSuffix(r[sd])}`);
+    for (const r of visibleRows()) {
+      // Solo i lati con dati veri (sidate registrate) o con una guida scritta: niente piani "inventati" su matchup mai sidati
+      const lines = SIDES.filter(([sd]) => hasPlan(r[sd].plan) && (r[sd].nSide > 0 || r[sd].level === "guida")).map(([sd, , ab]) => `${ab}: ${planLineShort(r[sd].plan)}${confSuffix(r[sd])}`);
       if (lines.length) blocks.push(`*vs ${r.name}*\n${lines.join("\n")}`);
     }
     return blocks.length ? [`*Piano sideboard · ${X.c.deck ? X.c.deck.name : ""}${X.c.ver ? ` · ${X.c.ver.name}` : ""}*`, ...blocks].join("\n\n") : "";
@@ -364,7 +368,7 @@
       drawSide(side);
     } else if (act === "copy") {
       if (!hasPlan(plan)) return;
-      copyText(`*vs ${row.name} · ${label}*\n${planLine(plan)}${confSuffix(row[side])}`, "Piano copiato");
+      copyText(`*vs ${row.name} · ${label}*\n${planLineShort(plan)}${confSuffix(row[side])}`, "Piano copiato");
     } else if (act === "guide") {
       if (!canEdit() || !hasPlan(plan)) return;
       const g = A.guideFor(row.archId), cur = g ? { in: (g[side + "_in"] || "").trim(), out: (g[side + "_out"] || "").trim() } : { in: "", out: "" };
@@ -407,7 +411,7 @@
 
     root.innerHTML = `
       <div class="page-head"><h1>Piano sideboard <span class="muted" style="font-weight:500">· ${esc(deck.name)}</span></h1>
-        <div class="inline no-print"><button class="btn" id="pn-copyall"${X.rows.length ? "" : " disabled"}>📋 Copia tutti i piani</button></div></div>
+        <div class="inline no-print"><button class="btn" id="pn-copyall" title="Copia i piani dei matchup visibili nella lista (restringi con ricerca o gruppi)"${X.rows.length ? "" : " disabled"}>📋 Copia piani</button></div></div>
       ${A.sbNavHTML ? A.sbNavHTML("plan") : ""}
       <div class="pn-meta no-print">
         <label class="pn-ver">Lista <select id="pn-ver" aria-label="Versione della lista">${c.versions.length ? c.versions.map((v) => `<option value="${esc(v.id)}"${c.ver && v.id === c.ver.id ? " selected" : ""}>${esc(v.name)}${v.is_active ? " (attiva)" : ""}</option>`).join("") : `<option value="">Nessuna lista</option>`}</select></label>
