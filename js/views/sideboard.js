@@ -193,6 +193,13 @@
     return out.join("\n");
   }
 
+  // Interruttore tra le pagine sideboard: Piano (#plan) | Statistiche (#sideboard) | Dalle note (solo chi può modificare)
+  A.sbNavHTML = (active) => {
+    const items = [["plan", "Piano", "#plan"], ["stats", "Statistiche", "#sideboard"]];
+    if (canEdit()) items.push(["notes", "Dalle note", "#sideboard/note"]);
+    return `<nav class="pn-switch no-print" aria-label="Pagine sideboard">${items.map(([k, l, h]) => `<a href="${h}"${k === active ? ` class="on" aria-current="page"` : ""}>${l}</a>`).join("")}</nav>`;
+  };
+
   // ---------------------------------------------------------------------
   //  Vista: panoramica
   // ---------------------------------------------------------------------
@@ -229,6 +236,7 @@
           <button class="btn" id="sb-sum">📋 Copia riassunto</button>
           <button class="btn sm" id="sb-print">Stampa / PDF</button>
         </div></div>
+      ${A.sbNavHTML("stats")}
       <details class="no-print sb-more"><summary class="muted small">Altri formati (per smanettoni)</summary>
         <div class="inline" style="margin-top:8px;flex-wrap:wrap">
           <button class="btn sm" id="sb-md">Esporta guida (.md)</button>
@@ -533,6 +541,7 @@
     const names = cardNames();
     root.innerHTML = `
       <div class="page-head"><div><a class="small" href="#sideboard">← Tutte le guide</a><h1 style="margin-top:4px">Sidate dalle note <span class="muted" style="font-weight:500">· ${esc(deck.name)}</span></h1></div></div>
+      ${A.sbNavHTML("notes")}
       <div class="no-print">${A.filtersHTML()}</div>
       <div class="nt-bar">
         <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="nt-all"${ntState.showAll ? " checked" : ""}> mostra anche già registrate</label>
