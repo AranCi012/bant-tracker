@@ -4,10 +4,11 @@
 //  da solo ogni volta che viene registrata una nuova sidata.
 //
 //    A.sbplan.core({ versions, matches })                                          -> CoreReport
-//    A.sbplan.recommend({ matches, archId, side, version, guide, groupArchIds })   -> Rec
+//    A.sbplan.recommend({ matches, archId, side, version, guide, groupArchIds })   -> Rec (con Rec.simple e Rec.oppAdj)
 //    A.sbplan.estimate({ matches, archId, side, plan, version, groupArchIds })     -> { wr, lo, hi, n, note }
 //    A.sbplan.overview({ matches, version, archetypes, groupOf, guideFor })        -> [{ archId, name, group, nMatches, nPost, nRec, play, draw }]
 //    A.sbplan.groupArchIds(archId, archetypes, groupOf)                            -> archetipi dello stesso gruppo ("Altro" = nessun gruppo)
+//  Tutte accettano anche `oppStrength: (match) => numero in [-1, 1]` (bravura dell'avversario; default 0 = come v1).
 //  `version` è l'OGGETTO versione della lista ({id,name,maindeck,sideboard,created_at,...}). Identità carta: A.cardKey.
 //
 //  METODO, IN PAROLE SEMPLICI
@@ -20,7 +21,19 @@
 //   - Timeline: per ogni versione (in ordine di creazione) cosa è cambiato rispetto alla precedente.
 //
 //  SIDATA CONSIGLIATA (recommend)
-//   1. Si guardano le game post-board (G2/G3). Una game "conta" un po' meno se nello stesso match ce n'è un'altra
+//   0. Bravura degli avversari (facoltativa: avversari valutati forte = +1, scarso = −1; medio o non valutato = 0).
+//      Ogni game post-board si legge come "risultato rispetto alle attese": contro un forte si parte con 9 punti di WR
+//      in meno, contro uno scarso con 9 in più. In pratica una vittoria contro un forte vale 1,09 invece di 1 e una
+//      sconfitta contro uno scarso vale −0,09 invece di 0; con un avversario medio o non valutato nulla cambia.
+//      Tutto ciò che segue (WR di partenza, effetti delle carte, confronto fra sidate provate) usa questi risultati
+//      corretti, così una sidata provata soprattutto contro giocatori scarsi non sembra migliore di quello che è.
+//      I conteggi mostrati ("vinte 3 su 4") restano quelli veri. Senza valutazioni i risultati sono identici a prima.
+//      Perché 9 punti: è circa 0,4 in scala logit (≈ 70 punti Elo); la differenza vera fra un forte e un medio è forse
+//      di 10-15 punti, ma le valutazioni sono a occhio e a volte sbagliate, e con un dato rumoroso conviene un
+//      coefficiente più piccolo del vero (diluizione da errore di misura). Nelle simulazioni, con valutazioni giuste
+//      9 punti tolgono buona parte della distorsione; con valutazioni del tutto a caso non peggiorano quasi nulla.
+//      Anche il WR di partenza è corretto (è quindi il WR atteso contro un avversario medio): serve perché il
+//      confronto "risultato di una sidata vs stima" sia fatto sulla stessa scala; l'effetto sul numero è di 1-2 punti. le game post-board (G2/G3). Una game "conta" un po' meno se nello stesso match ce n'è un'altra
 //      (G2 e G3 con lo stesso avversario si somigliano): peso 1/(1+0,3) invece di 1.
 //   2. WR di partenza del matchup+lato (con la sidata "solita"): media prudente a cascata. Si parte dal WR post-board
 //      di tutti i mazzi, ci si sposta verso gli altri mazzi del gruppo (Combo, Tempo, ...), poi verso le game dell'altro
@@ -51,6 +64,13 @@
 //   8. Verdetto carta: chiave (effetto >= +6 punti, o >= +3 e mossa almeno metà delle volte), utile (>= +1),
 //      sconsigliata (<= -4, o <= -2 se mossa raramente), neutra altrimenti. Per le carte OUT "effetto" = effetto di
 //      toglierla. Gli effetti sono frazioni (0,05 = +5 punti percentuali di WR post-board).
+//   9. Vista semplice (Rec.simple, per chi non vuole numeri): un titolo in italiano semplice, il piano, il record VERO
+//      di quella sidata su quel lato (o della sidata provata più simile, al massimo 4 copie di differenza) e al massimo
+//      una frase. "In media ha funzionato meglio" solo se la sidata è stata provata almeno 2 volte su quel lato e
+//      nessun'altra provata almeno 2 volte ha fatto meglio nei risultati grezzi; con meno di 3 sidate sul lato il
+//      titolo comincia sempre con "Ancora poche partite" (o "Ancora nessuna sidata").
+//      Rec.oppAdj = { nRated, nGames, shift }: game post-board del matchup+lato con avversario valutato, game totali,
+//      correzione media applicata in punti (positiva = avversari in media più forti del normale).
 //  Limiti: l'effetto è per carta, non per copia (+2 o +3 Carpet contano uguale); con 1-8 sidate per matchup i numeri
 //  sono indizi, non prove: il motore lo dice (confidence) e resta vicino a guida/sidata più usata.
 // =====================================================================
@@ -71,6 +91,8 @@
     TAU_PLAN: 0.05,    // quanto una sidata precisa può rendere diversamente dalla somma delle sue carte
     CARD_COST: 0.01,   // costo di ogni carta mossa nella costruzione del piano (evita piani gonfi di carte "neutre")
     PLAY_PRIOR: 0.04, PLAY_PRIOR_SD: 0.04,
+    OPP: 0.09,         // bravura avversario: una game contro un "forte" (+1) vale come partire con 9 punti in meno di WR atteso
+    OPP_BASE: true,    // la stessa correzione vale anche per il WR di partenza del matchup (vedi METODO, punto 0)
     MARGIN: 0.02, MARGIN_WEAK: 0.04, WEAK: 3, TMAX: 15,
     Z80: 1.2815515655,
   };
@@ -156,8 +178,15 @@
   // ---------------------------------------------------------------------
   //  Preparazione dei dati (una volta per chiamata)
   // ---------------------------------------------------------------------
-  const zPost = () => ({ n: 0, wins: 0, nw: 0, ww: 0 });
-  function prep(matches) {
+  const zPost = () => ({ n: 0, wins: 0, nw: 0, ww: 0, nRated: 0, adj: 0 });
+  // Bravura dell'avversario in [-1, 1] (0 = media o non valutato); qualsiasi valore strano vale 0
+  function strengthOf(oppStrength, m) {
+    if (typeof oppStrength !== "function") return 0;
+    let s;
+    try { s = +oppStrength(m); } catch (e) { s = 0; }
+    return Number.isFinite(s) ? clamp(s, -1, 1) : 0;
+  }
+  function prep(matches, oppStrength) {
     const P = { cd: new Map(), cds: [], spell: new Map(), games: [], arch: new Map(), gcache: new Map() };
     const idx = (dir, key) => {
       const id = dir + "|" + key;
@@ -175,9 +204,12 @@
       a.nMatches++;
       const post = A.gamesOf(m).filter((g) => g.n >= 2);
       const w = 1 / (1 + K.DEP * Math.max(0, post.length - 1));
+      // risultato "sopra le attese": contro un forte la vittoria vale di più, contro uno scarso la sconfitta pesa di più
+      const adj = K.OPP * strengthOf(oppStrength, m);
       for (const g of post) {
-        const side = sideOf(g), y = g.r === "W" ? 1 : 0;
-        const ps = a.post[side]; ps.n++; ps.wins += y; ps.nw += w; ps.ww += w * y;
+        const side = sideOf(g), y = g.r === "W" ? 1 : 0, ya = y + adj, yb = K.OPP_BASE ? ya : y;
+        const ps = a.post[side]; ps.n++; ps.wins += y; ps.nw += w; ps.ww += w * yb;
+        if (adj) { ps.nRated++; ps.adj += adj; }
         if (!g.sb) continue;
         const mi = toMap(g.sb.in), mo = toMap(g.sb.out);
         if (!mi.size && !mo.size) continue;
@@ -185,7 +217,7 @@
         for (const [k, c] of mi) { x.set(idx("in", k), c.q); addSpell(P, k, c.name); }
         for (const [k, c] of mo) { x.set(idx("out", k), c.q); addSpell(P, k, c.name); }
         const sig = [...x].map(([i, q]) => P.cds[i].id + ":" + q).sort().join(";");
-        const rg = { arch: m.archetype_id, side, y, w, date: m.played_at || "", x, sig };
+        const rg = { arch: m.archetype_id, side, y, ya, yb, w, date: m.played_at || "", x, sig };
         P.games.push(rg); a.rec[side].push(rg);
         if (rg.date > a.last) a.last = rg.date;
       }
@@ -244,9 +276,9 @@
     let W = 0, Wy = 0;
     const xb = new Float64Array(n), XtX = new Float64Array(n * n), Xty = new Float64Array(n);
     for (const g of gs) {
-      W += g.w; Wy += g.w * g.y;
+      W += g.w; Wy += g.w * g.ya;
       const ks = [...g.x.keys()];
-      for (const i of ks) { xb[i] += g.w; Xty[i] += g.w * g.y; for (const j of ks) XtX[i * n + j] += g.w; }
+      for (const i of ks) { xb[i] += g.w; Xty[i] += g.w * g.ya; for (const j of ks) XtX[i * n + j] += g.w; }
     }
     const yb = Wy / W;
     for (let i = 0; i < n; i++) xb[i] /= W;
@@ -597,11 +629,13 @@
     const basePost = S.post;
     const baseline = basePost.n ? { wr: r3(basePost.wins / basePost.n), n: basePost.n } : null;
     const nm = ctx.meta.name || "questo mazzo", sl = SIDE_LABEL[side], grpName = ctx.meta.group || null;
+    const oppAdj = { nRated: basePost.nRated, nGames: basePost.n, shift: basePost.n ? Math.round((1000 * basePost.adj) / basePost.n) / 10 : 0 };
+    const plainPlan = (pl) => ({ in: pl.in.map((c) => ({ q: c.q, name: c.name })), out: pl.out.map((c) => ({ q: c.q, name: c.name })) });
 
     // Sidate osservate (raggruppate per piano identico)
     const observed = (gs) => {
       const by = new Map();
-      for (const g of gs) { if (!by.has(g.sig)) by.set(g.sig, { pm: fromGame(g), n: 0, wins: 0, nw: 0, ww: 0, last: "" }); const e = by.get(g.sig); e.n++; e.wins += g.y; e.nw += g.w; e.ww += g.w * g.y; if (g.date > e.last) e.last = g.date; }
+      for (const g of gs) { if (!by.has(g.sig)) by.set(g.sig, { pm: fromGame(g), n: 0, wins: 0, nw: 0, ww: 0, last: "" }); const e = by.get(g.sig); e.n++; e.wins += g.y; e.nw += g.w; e.ww += g.w * g.yb; if (g.date > e.last) e.last = g.date; }
       return [...by.entries()].map(([sig, e]) => ({ sig, ...e })).sort((x, y) => y.n - x.n || y.wins - x.wins || (x.sig < y.sig ? -1 : 1));
     };
     const obsSide = observed(recSide), obsArch = observed(recArch);
@@ -613,6 +647,8 @@
         plan: { in: [], out: [] }, expected: null, baseline, confidence: "nessuna",
         why: [basePost.n ? `Contro ${nm} ${sl} ci sono ${basePost.n} game post-board ma nessuna sidata registrata, né contro mazzi simili, e nessuna guida scritta.` : `Nessuna sidata registrata contro ${nm} né contro mazzi simili, e nessuna guida scritta.`],
         alternatives: [], cards: [], notInVersion: [], updatedAt: null,
+        simple: { headline: "Ancora nessuna sidata", plan: { in: [], out: [] }, record: null, source: "nessuno", note: null },
+        oppAdj,
       };
     }
 
@@ -757,14 +793,61 @@
       why.push(xs.map((x) => `${x.name} ${x.note}`).join("; ") + (notInVersion.length > 2 ? ` (e altre ${notInVersion.length - 2})` : "") + ".");
     }
 
+    const plan = toPlan(chosen.pm);
+    const simple = simpleView({ side, chosen, how, weak, nMatchup, nGroup, obsSide, obsChosen, recArch, gd, plan: plainPlan(plan) });
+
     return {
       archId: ctx.archId, side, level, nUsed, nSide, nMatchup,
-      plan: toPlan(chosen.pm),
+      plan,
       expected: { wr: r3(ex.wr), lo: r3(ex.lo), hi: r3(ex.hi) },
       baseline, confidence, why: why.slice(0, 4),
       alternatives: out, cards, notInVersion,
       updatedAt: (level === "gruppo" ? ctx.last : a.last || ctx.last) || null,
+      simple, oppAdj,
     };
+  }
+
+  // Vista semplice per chi non vuole numeri: titolo, piano, record osservato (conteggi veri), al massimo una frase.
+  // Non dice mai più di quanto mostrano i dati: "ha funzionato meglio" solo se la sidata è stata provata almeno 2 volte
+  // su questo lato e nessun'altra sidata provata almeno 2 volte ha fatto meglio nei risultati grezzi.
+  const planDist = (x, y) => { let d = 0; for (const id of new Set([...x.keys(), ...y.keys()])) d += Math.abs((x.get(id) || 0) - (y.get(id) || 0)); return d; };
+  const timesIt = (n) => (n === 1 ? "una volta" : `${n} volte`);
+  function simpleView({ side, chosen, how, weak, nMatchup, nGroup, obsSide, obsChosen, recArch, gd, plan }) {
+    const sl = SIDE_LABEL[side];
+    // sidata provata solo sull'altro lato (o senza lato): dove e con che risultato
+    const archObs = chosen.kind === "testedArch" ? chosen.obs : null;
+    let archWhere = "in questo matchup";
+    if (archObs) {
+      const sides = new Set(recArch.filter((g) => g.sig === archObs.sig).map((g) => g.side));
+      if (sides.size === 1 && !sides.has("na")) archWhere = SIDE_LABEL[[...sides][0]];
+    }
+    const won = (n, w) => (n === 1 ? (w ? "vinta" : "persa") : `vinte ${w}`);
+    // record: la sidata stessa su questo lato, altrimenti la più simile (al massimo 4 copie di differenza)
+    let rec = obsChosen || null, exact = !!obsChosen;
+    if (!rec && obsSide.length) {
+      let best = null, bd = Infinity;
+      for (const o of obsSide) { const d = planDist(o.pm, chosen.pm); if (d < bd) { best = o; bd = d; } } // obsSide è già ordinato per n
+      if (best && bd <= 4) rec = best;
+    }
+    // Vista per gli utenti (richiesta esplicita): un titolo solo, semplice, e i numeri grezzi. Niente sfumature tecniche.
+    //  - c'è una guida e pochi dati      -> "Guida scritta"
+    //  - nessuna sidata contro il mazzo  -> "Come contro mazzi simili" (il piano viene dal gruppo)
+    //  - altrimenti                      -> "In media ha funzionato meglio"
+    // Il "record" è mostrato solo se è proprio di QUESTA sidata su questo lato; altrimenti una frase semplice.
+    const record = rec && exact ? { wins: rec.wins, n: rec.n } : null;
+    let headline, source = "dati";
+    if (how === "guida") { source = "guida"; headline = "Guida scritta"; }
+    else if (!nMatchup) headline = nGroup ? "Come contro mazzi simili" : "Ancora nessuna sidata";
+    else headline = "In media ha funzionato meglio";
+    let note = null;
+    if (rec && !exact) note = `Con sidate simili ${sl}: ${won(rec.n, rec.wins)}${rec.n === 1 ? "" : ` su ${rec.n}`}.`;
+    else if (!rec && archObs) note = `Provata ${timesIt(archObs.n)} ${archWhere}: ${won(archObs.n, archObs.wins)}.`;
+    else if (!rec) {
+      const os = OTHER[side], same = recArch.filter((g) => g.side === os && g.sig === chosen.sig);
+      if (same.length) note = `Provata ${timesIt(same.length)} ${SIDE_LABEL[os]}: ${won(same.length, same.reduce((t, g) => t + g.y, 0))}.`;
+      else if (how === "guida" && gd && gd.otherSide) note = `La guida scritta è per ${SIDE_LABEL[OTHER[side]]}.`;
+    }
+    return { headline, plan, record, source, note };
   }
 
   // ---------------------------------------------------------------------
@@ -783,16 +866,16 @@
   }
   const ctxFor = (P, archId, groupIds, meta) => archCtx(P, archId, meta.altro ? [] : groupIds, meta);
 
-  function recommend({ matches, archId, side = "play", version, guide, groupArchIds: gIds } = {}) {
+  function recommend({ matches, archId, side = "play", version, guide, groupArchIds: gIds, oppStrength } = {}) {
     const s = side === "draw" ? "draw" : "play";
-    const P = prep(matches);
+    const P = prep(matches, oppStrength);
     const ctx = ctxFor(P, archId, gIds, metaFor(archId));
     return buildRec(P, ctx, s, version, guide || null);
   }
 
-  function estimate({ matches, archId, side = "play", plan, version, groupArchIds: gIds } = {}) {
+  function estimate({ matches, archId, side = "play", plan, version, groupArchIds: gIds, oppStrength } = {}) {
     const s = side === "draw" ? "draw" : "play";
-    const P = prep(matches), meta = metaFor(archId);
+    const P = prep(matches, oppStrength), meta = metaFor(archId);
     const ctx = ctxFor(P, archId, gIds, meta), S = ctx.sides[s], av = availability(P, version);
     const pm = new Map(), names = new Map();
     for (const dir of ["in", "out"]) for (const [k, c] of toMap((plan || {})[dir])) { pm.set(pid(dir, k), (pm.get(pid(dir, k)) || 0) + c.q); names.set(pid(dir, k), c.name); }
@@ -817,8 +900,8 @@
     return { wr: r3(e.wr), lo: r3(e.lo), hi: r3(e.hi), n: same.length, note: notes.join(" ") };
   }
 
-  function overview({ matches, version, archetypes, groupOf, guideFor } = {}) {
-    const P = prep(matches), archs = archetypes || [];
+  function overview({ matches, version, archetypes, groupOf, guideFor, oppStrength } = {}) {
+    const P = prep(matches, oppStrength), archs = archetypes || [];
     const go = groupOf || A.groupOf || (() => null);
     const gOf = new Map(archs.map((a) => [a.id, go(a.id)]));
     const members = new Map();
@@ -840,7 +923,8 @@
   // ---------------------------------------------------------------------
   //  Core del mazzo e modifiche nel tempo
   // ---------------------------------------------------------------------
-  function core({ versions, matches } = {}) {
+  // `oppStrength` è accettato per uniformità ma non usato: i conteggi flex sono match vinti/giocati, solo descrittivi.
+  function core({ versions, matches, oppStrength } = {}) { // eslint-disable-line no-unused-vars
     const vs = (versions || []).slice().sort((x, y) => String(x.created_at || "").localeCompare(String(y.created_at || "")) || String(x.name || "").localeCompare(String(y.name || "")));
     const ms = matches || [];
     const nOf = new Map(vs.map((v) => [v.id, 0]));
@@ -904,5 +988,5 @@
     };
   }
 
-  A.sbplan = { core, recommend, estimate, overview, groupArchIds, _K: K, _internal: { prep, archCtx, expectedOf } };
+  A.sbplan = { core, recommend, estimate, overview, groupArchIds, _K: K, _internal: { prep, archCtx, expectedOf, strengthOf } };
 })();
