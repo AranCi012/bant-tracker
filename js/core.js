@@ -110,6 +110,12 @@
       a[i] = { ...a[i], ...patch }; lsSet("db_" + t, a); return a[i];
     },
     async remove(t, id) { lsSet("db_" + t, lsGet("db_" + t, []).filter((x) => x.id !== id)); },
+    async upsert(t, row, keyField) {
+      const a = lsGet("db_" + t, []); const i = a.findIndex((x) => x[keyField] === row[keyField]);
+      const r = i < 0 ? { created_at: now(), ...row } : { ...a[i], ...row };
+      if (i < 0) a.push(r); else a[i] = r; lsSet("db_" + t, a); return r;
+    },
+    async removeWhere(t, field, value) { lsSet("db_" + t, lsGet("db_" + t, []).filter((x) => x[field] !== value)); },
   };
 
   const Remote = {
@@ -153,6 +159,8 @@
     async insert(t, row) { readOnlyGuard(); const { data, error } = await this.client.from(t).insert(row).select().single(); if (error) throw error; return data; },
     async update(t, id, patch) { readOnlyGuard(); const { data, error } = await this.client.from(t).update(patch).eq("id", id).select().single(); if (error) throw error; return data; },
     async remove(t, id) { readOnlyGuard(); const { error } = await this.client.from(t).delete().eq("id", id); if (error) throw error; },
+    async upsert(t, row, keyField) { readOnlyGuard(); const { data, error } = await this.client.from(t).upsert(row, { onConflict: keyField }).select().single(); if (error) throw error; return data; },
+    async removeWhere(t, field, value) { readOnlyGuard(); const { error } = await this.client.from(t).delete().eq(field, value); if (error) throw error; },
   };
 
   const DB = REMOTE ? Remote : Local;
@@ -179,6 +187,7 @@
     matches: [],      // tutti i match (di tutti i mazzi)
     guides: [],       // sideboard_guides (per coppia mazzo × archetipo)
     groups: [],       // archetype_groups: famiglie di archetipi (Combo, Control, ...)
+    oppRatings: [],   // opponent_ratings: bravura dei giocatori avversari (-1 scarso, 0 medio, 1 forte)
     deckId: lsGet("deckId", ""),
     me: lsGet("me", ""),
     filters: emptyFilters(), // ogni visita parte da "tutti i match"
@@ -196,6 +205,7 @@
     S.matches = m;
     S.guides = g;
     // I gruppi arrivano con la migrazione 004: se il database non l'ha ancora, l'app funziona lo stesso senza.
+    S.oppRatings = await DB.all("opponent_ratings").catch(() => []); // migrazione 005: senza, l'app funziona lo stesso
     S.groups = (await DB.all("archetype_groups").catch(() => [])).sort((x, y) => (x.sort || 0) - (y.sort || 0) || x.name.localeCompare(y.name));
     if (S.filters.group && S.filters.group !== "__none" && !S.groups.some((x) => x.id === S.filters.group)) S.filters.group = "";
     if (!S.decks.some((x) => x.id === S.deckId)) setDeck(S.decks[0] ? S.decks[0].id : "", true);
@@ -317,6 +327,22 @@
       (!f.from || (m.played_at || "") >= f.from) &&
       (!f.to || (m.played_at || "") <= f.to));
   }
+  // ---- Bravura dei giocatori avversari -----------------------------------
+  const oppKey = (name) => String(name || "").trim().replace(/\s+/g, " ").toLowerCase();
+  // -1 scarso, 0 medio, 1 forte, null = non valutato
+  const oppRating = (name) => { const k = oppKey(name); if (!k) return null; const r = S.oppRatings.find((x) => x.key === k); return r ? r.rating : null; };
+  async function saveOppRating(name, rating, notes) {
+    const key = oppKey(name); if (!key) return;
+    if (rating == null) { await DB.removeWhere("opponent_ratings", "key", key); S.oppRatings = S.oppRatings.filter((x) => x.key !== key); return null; }
+    const prev = S.oppRatings.find((x) => x.key === key);
+    const row = await DB.upsert("opponent_ratings", { key, name: String(name).trim(), rating, notes: notes != null ? notes : (prev ? prev.notes : ""), updated_at: now() }, "key");
+    S.oppRatings = [...S.oppRatings.filter((x) => x.key !== key), row];
+    return row;
+  }
+  // Modalità avanzata (solo per chi gestisce l'app): attivata con il link #owner=on, disattivata con #owner=off.
+  // È solo una scelta di cosa mostrare (dettagli statistici), non un permesso.
+  const isOwner = () => !!lsGet("owner", false);
+
   // ---- Gruppi di archetipi --------------------------------------------
   const groupById = (id) => S.groups.find((g) => g.id === id) || null;
   const groupOf = (archId) => { const a = archById(archId); return a && a.group_id ? groupById(a.group_id) : null; };
@@ -736,6 +762,8 @@
   }
 
   async function start() {
+    const om = location.hash.match(/^#owner=(on|off)$/);
+    if (om) { lsSet("owner", om[1] === "on"); history.replaceState(null, "", location.pathname + location.search + "#plan"); }
     $("#app-name").textContent = CFG.APP_NAME || "Meta Tracker";
     try {
       if (REMOTE) {
@@ -780,6 +808,7 @@
     $, $$, esc, lsGet, lsSet, uid, today, pct, fmtDate, titleName, archName,
     cardKey, parseList, countList, listMap, listToText,
     reload, currentDeck, setDeck, aliases, saveAliases, versions, versionById, activeVersion, deckMatches, guideFor, saveGuide,
+    oppKey, oppRating, saveOppRating, isOwner,
     archById, players, chrono, groupById, groupOf, byGroup, DEFAULT_GROUPS,
     gamesOf, matchResult, wilson, stats, record, filtered, byArchetype,
     wrColor, meter, coverCard, artUrl, toast, openModal, closeModal, showTip, hideTip, ttRows, guard, download, kpi,
