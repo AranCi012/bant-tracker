@@ -1,5 +1,7 @@
-// Vista "Piano sideboard" (#plan, #plan/<archetipo>): per ogni matchup il piano consigliato (on the play / on the draw),
-// con fiducia, win rate atteso, alternative osservate, prova-modifiche e riepilogo del mazzo.
+// Vista "Piano sideboard" (#plan, #plan/<archetipo>): per ogni matchup il piano consigliato (on the play / on the draw).
+// Utenti normali: vista semplice (piano + "in media ha funzionato meglio" + record), senza fiducia/intervalli.
+// Proprietario (A.isOwner(), link #owner=on): vista avanzata con fiducia, win rate atteso, alternative, prova-modifiche, riepilogo del mazzo
+// e correzione per la bravura degli avversari; puo' anteprimare la vista utenti con un interruttore.
 // Usa il motore A.sbplan (js/sbplan.js). Se il motore non c'e' ancora usa un MOCK minimale (vedi sotto) e lo dichiara.
 (() => {
   "use strict";
@@ -87,12 +89,17 @@
     };
   })();
   const eng = () => A.sbplan || MOCK;
+  // Modalita': avanzata solo per il proprietario (e solo se non sta guardando l'anteprima utenti)
+  const isOwner = () => !!(A.isOwner && A.isOwner());
+  const adv = () => isOwner() && !P.userView;
+  // Bravura dell'avversario in [-1, 1] (0 = media/sconosciuta); il motore puo' ignorarla
+  const oppStrength = (m) => { const r = A.oppRating ? A.oppRating(m.opponent) : null; return r == null ? 0 : r; };
   const mocked = () => !A.sbplan;
 
   // ---------------------------------------------------------------------
   //  Stato (sopravvive ai re-render e ai cambi di vista)
   // ---------------------------------------------------------------------
-  const P = { deck: null, q: "", group: "", sort: "giocati", verId: "", sel: null, alt: { play: 0, draw: 0 }, edit: { play: null, draw: null }, cardsOpen: { play: false, draw: false }, deckOpen: false };
+  const P = { deck: null, q: "", group: "", sort: "giocati", verId: "", sel: null, alt: { play: 0, draw: 0 }, edit: { play: null, draw: null }, cardsOpen: { play: false, draw: false }, deckOpen: false, userView: false };
   const resetSel = () => { P.alt = { play: 0, draw: 0 }; P.edit = { play: null, draw: null }; };
   let X = null; // contesto del render corrente: { root, c, rows, err }
 
@@ -124,7 +131,7 @@
     return { deck: A.currentDeck(), versions, ver, ms: A.deckMatches() };
   }
   function computeRows(c) {
-    const rows = eng().overview({ matches: c.ms, version: c.ver || undefined, archetypes: S.archetypes, groupOf: A.groupOf, guideFor: A.guideFor });
+    const rows = eng().overview({ matches: c.ms, version: c.ver || undefined, archetypes: S.archetypes, groupOf: A.groupOf, guideFor: A.guideFor, oppStrength });
     const rec = new Map();
     for (const m of c.ms) {
       if (!rec.has(m.archetype_id)) rec.set(m.archetype_id, { W: 0, L: 0, D: 0 });
@@ -153,14 +160,15 @@
     const w = r.rec, rec = `${w.W}–${w.L}${w.D ? `–${w.D}` : ""}`;
     return `<button type="button" class="pn-row${r.archId === P.sel ? " on" : ""}" data-id="${esc(r.archId)}" aria-pressed="${r.archId === P.sel}">
       <span class="pn-rname">${esc(r.name)}</span><span class="pn-rrec num" data-tip="${esc(`${r.nMatches} match: ${w.W} vinti, ${w.L} persi${w.D ? `, ${w.D} pari` : ""}`)}">${rec}</span>
-      <span class="pn-dots">${confDot(r.play, "OTP")}${confDot(r.draw, "OTD")}</span></button>`;
+      ${adv() ? `<span class="pn-dots">${confDot(r.play, "OTP")}${confDot(r.draw, "OTD")}</span>` : ""}</button>`;
   }
 
   // Chip del piano: +q Nome (verde) / −q Nome (rosso); "chiave" in grassetto con pallino
-  function chipsHTML(plan, rec, extra) {
+  function chipsHTML(plan, rec, extra, simple) {
     const verd = new Map((rec.cards || []).map((c) => [A.cardKey(c.name), c.verdict]));
     const nov = new Set((rec.notInVersion || []).map((n) => n.key || A.cardKey(n.name)));
     const one = (c, dir) => {
+      if (simple) return `<span class="pn-chip ${dir}" data-card="${esc(c.name)}">${dir === "in" ? "+" : MINUS}${c.q} ${esc(c.name)}</span>`;
       const k = A.cardKey(c.name), v = c.verdict || verd.get(k), key = v === "chiave", off = nov.has(k);
       const tips = [];
       if (c.freq != null) tips.push(`mossa in ${Math.round(c.freq * 100)}% dei game`);
@@ -193,7 +201,40 @@
     return "";
   }
 
+  // Vista utenti: niente gergo statistico. Usa rec.simple del motore; se manca ne ricava una versione minima.
+  function simpleOf(rec) {
+    const s = rec.simple;
+    if (s) return { headline: s.headline || "", plan: s.plan || rec.plan || { in: [], out: [] }, record: s.record && s.record.n ? s.record : null, note: s.note || null };
+    const plan = rec.plan || { in: [], out: [] }, has = hasPlan(plan), n = rec.nUsed || 0, b = rec.baseline;
+    return {
+      headline: has && n > 0 ? "In media ha funzionato meglio" : has && rec.level === "guida" ? "Ancora poche partite: guida scritta" : "Nessuna sidata ancora",
+      plan,
+      record: has && n > 0 && b && b.n ? { wins: Math.round(b.wr * b.n), n: b.n } : null,
+      note: null,
+    };
+  }
+  const recLine = (r) => `${r.wins === 1 ? "Vinta" : "Vinte"} ${r.wins} su ${r.n} con questa sidata`;
+
+  function simpleSideHTML(row, side) {
+    const rec = row[side], label = SIDES.find((s) => s[0] === side)[1], s = simpleOf(rec), empty = !hasPlan(s.plan);
+    let h = `<section class="card pn-side pn-simple"><div class="pn-shead"><h3>${label}</h3></div><p class="pn-headline">${esc(s.headline)}</p>`;
+    if (!empty) h += chipsHTML(s.plan, rec, "", true);
+    if (s.record) h += `<p class="pn-recline num">${esc(recLine(s.record))}</p>`;
+    if (s.note) h += `<p class="pn-snote muted small">${esc(s.note)}</p>`;
+    if (!empty) h += `<div class="pn-actions no-print">${canEdit() ? `<button type="button" class="btn sm" data-act="guide" data-side="${side}">Usa come guida</button>` : ""}<button type="button" class="btn sm" data-act="copy" data-side="${side}">Copia</button></div>`;
+    return h + `</section>`;
+  }
+
+  // Solo proprietario: quanto il risultato e' stato pesato per la bravura degli avversari
+  function oppAdjHTML(rec) {
+    const a = rec.oppAdj;
+    if (!a || !(a.nRated > 0)) return "";
+    const sh = Number(a.shift) || 0;
+    return `<div class="pn-oppadj muted small">Pesato per bravura avversari: ${a.nRated} game su ${a.nGames} con avversario valutato, correzione media ${sh >= 0 ? "+" : MINUS}${Math.abs(sh).toFixed(1).replace(/\.0$/, "")} pt</div>`;
+  }
+
   function sideHTML(row, side) {
+    if (!adv()) return simpleSideHTML(row, side);
     const rec = row[side], label = SIDES.find((s) => s[0] === side)[1];
     const alts = rec.alternatives || [], ai = Math.min(P.alt[side], alts.length), alt = ai ? alts[ai - 1] : null;
     const plan = alt ? alt.plan : rec.plan, empty = !hasPlan(plan);
@@ -201,6 +242,7 @@
     let h = `<section class="card pn-side"><div class="pn-shead"><h3>${label}</h3><span class="pn-conf c-${esc(cf)}">${CONF_LBL[cf]}</span></div>`;
     const meta = [levelHint(rec, row), rec.nUsed ? `${rec.nUsed} ${rec.nUsed === 1 ? "game" : "game"} con sidata${rec.updatedAt ? ` · ultimo ${shortDate(rec.updatedAt)}` : ""}` : ""].filter(Boolean);
     if (meta.length) h += `<div class="pn-hint muted small">${meta.map((x, i) => (i ? " · " : "") + x).join("")}</div>`;
+    h += oppAdjHTML(rec);
     if (alts.length) {
       h += `<div class="pn-pills" role="tablist" aria-label="Piani ${esc(label)}"><button type="button" class="pn-pill${ai === 0 ? " on" : ""}" data-alt="0" data-side="${side}">Consigliato</button>
         ${alts.map((a, i) => `<button type="button" class="pn-pill${ai === i + 1 ? " on" : ""}" data-alt="${i + 1}" data-side="${side}">${esc(a.label || `Alternativa ${i + 2}`)}</button>`).join("")}</div>`;
@@ -245,17 +287,19 @@
   const bindHover = (el) => { if (el && A.cards && A.cards.bindHover) A.cards.bindHover(el); };
 
   function shownPlan(row, side) {
-    const rec = row[side], alts = rec.alternatives || [], ai = Math.min(P.alt[side], alts.length);
+    const rec = row[side];
+    if (!adv()) return { plan: simpleOf(rec).plan, exp: null };
+    const alts = rec.alternatives || [], ai = Math.min(P.alt[side], alts.length);
     return { plan: ai ? alts[ai - 1].plan : rec.plan, exp: ai ? { wr: alts[ai - 1].wr } : rec.expected };
   }
 
   function updEst(side) {
     const row = selectedRow(), el = $(`#pn-s-${side} .pn-est`);
-    if (!row || !el || !P.edit[side]) return;
+    if (!row || !el || !P.edit[side] || !adv()) return;
     const v = P.edit[side], rec = row[side];
     if (!hasPlan(v)) { el.innerHTML = `<span class="muted small">Aggiungi carte IN e OUT per vedere la stima.</span>`; return; }
     let e;
-    try { e = eng().estimate({ matches: X.c.ms, archId: row.archId, side, plan: { in: v.in, out: v.out }, version: X.c.ver || undefined, groupArchIds: groupArchIds(row.archId) }); }
+    try { e = eng().estimate({ matches: X.c.ms, archId: row.archId, side, plan: { in: v.in, out: v.out }, version: X.c.ver || undefined, groupArchIds: groupArchIds(row.archId), oppStrength }); }
     catch (err) { console.error(err); el.innerHTML = `<span class="warn">Stima non disponibile.</span>`; return; }
     const ref = shownPlan(row, side).exp, d = e && e.wr != null && ref && ref.wr != null ? (e.wr - ref.wr) * 100 : null;
     el.innerHTML = `<div class="pn-est-h"><b>Stima con le tue modifiche</b>${d != null ? `<span class="pn-delta ${d >= 0 ? "up" : "down"}">${d >= 0 ? "+" : MINUS}${Math.abs(d).toFixed(1).replace(/\.0$/, "")} pt <small>vs piano mostrato</small></span>` : ""}</div>
@@ -267,7 +311,7 @@
     const row = selectedRow(), host = $(`#pn-s-${side}`);
     if (!row || !host) return;
     host.innerHTML = sideHTML(row, side);
-    if (P.edit[side]) {
+    if (adv() && P.edit[side]) {
       A.sbEditor($(".pn-edithost", host), {
         version: () => X.c.ver || undefined, value: P.edit[side],
         buttons: [{ label: "Riparti dal piano mostrato", run(ed) { ed.set(clonePlan(shownPlan(row, side).plan)); } }],
@@ -286,7 +330,7 @@
     if (!row) { el.innerHTML = X.rows.length ? `<div class="card empty-state"><p>Scegli un matchup dalla lista.</p></div>` : ""; return; }
     const w = row.rec;
     el.innerHTML = `<div class="pn-dhead"><div><h2 class="pn-dtitle">vs ${esc(row.name)}${row.gname ? ` <span class="grp-chip">${esc(row.gname)}</span>` : ""}</h2>
-        <span class="muted small">${row.nMatches} match (${w.W}–${w.L}${w.D ? `–${w.D}` : ""}) · ${row.nPost} game post-board</span></div>
+        <span class="muted small">${row.nMatches} match (${w.W}–${w.L}${w.D ? `–${w.D}` : ""})${adv() ? ` · ${row.nPost} game post-board` : ""}</span></div>
         <a class="btn sm no-print" href="#sideboard/${encodeURIComponent(row.archId)}">Guida e statistiche →</a></div>
       <div class="pn-sides"><div id="pn-s-play"></div><div id="pn-s-draw"></div></div>`;
     drawSide("play"); drawSide("draw");
@@ -318,10 +362,16 @@
   const sumQ = (l) => l.reduce((s, c) => s + c.q, 0);
   function deckBodyHTML() {
     let core;
-    try { core = eng().core({ versions: X.c.versions, matches: X.c.ms }); }
+    try { core = eng().core({ versions: X.c.versions, matches: X.c.ms, oppStrength }); }
     catch (err) { console.error(err); return `<p class="warn">Impossibile calcolare il riepilogo del mazzo.</p>`; }
     if (!core || !core.versions || !core.versions.length) return `<p class="muted">Nessuna lista salvata per questo mazzo: aggiungila dalla scheda Lista.</p>`;
     const cc = (l) => `<div class="pn-ccs">${l.map((c) => `<span class="pn-cc" data-card="${esc(c.name)}"><b>${c.q}</b> ${esc(c.name)}</span>`).join("") || `<span class="muted small">—</span>`}</div>`;
+    if (!adv()) {
+      const tls = core.timeline.slice().reverse().map((t) => `<li><div class="pn-th"><b class="num">${esc(dayOf(t.date))}</b> <span>${esc(t.name)}</span></div>
+        ${t.changes.length ? `<div class="pn-tch">${t.changes.map((x) => { const d = x.to - x.from; return `<span class="pn-chip ${d > 0 ? "in" : "out"}" data-card="${esc(x.name)}">${d > 0 ? "+" : MINUS}${Math.abs(d)} ${esc(x.name)} <small>${x.zone === "main" ? "main" : "side"}</small></span>`; }).join("")}</div>` : `<div class="muted small">nessuna modifica rispetto alla precedente</div>`}</li>`).join("");
+      return `<div class="pn-core"><div><h4>Main <span class="num">${sumQ(core.core.main)}</span></h4>${cc(core.core.main)}</div><div><h4>Side <span class="num">${sumQ(core.core.side)}</span></h4>${cc(core.core.side)}</div></div>
+        <h4 class="pn-h4">Versioni</h4><ol class="pn-tl">${tls}</ol>`;
+    }
     const vers = core.versions;
     const spark = (f) => {
       const max = Math.max(1, ...f.byVersion.map((b) => b.q));
@@ -345,12 +395,14 @@
   // ---------------------------------------------------------------------
   //  Copia
   // ---------------------------------------------------------------------
-  const confSuffix = (rec) => (rec.level === "guida" ? " (da guida)" : rec.confidence && rec.confidence !== "nessuna" ? ` (${CONF_LBL[rec.confidence]})` : "");
+  const confSuffix = (rec) => (!adv() ? "" : rec.level === "guida" ? " (da guida)" : rec.confidence && rec.confidence !== "nessuna" ? ` (${CONF_LBL[rec.confidence]})` : "");
   function copyAllText() {
     const blocks = [];
     for (const r of visibleRows()) {
       // Solo i lati con dati veri (sidate registrate) o con una guida scritta: niente piani "inventati" su matchup mai sidati
-      const lines = SIDES.filter(([sd]) => hasPlan(r[sd].plan) && (r[sd].nSide > 0 || r[sd].level === "guida")).map(([sd, , ab]) => `${ab}: ${planLineShort(r[sd].plan)}${confSuffix(r[sd])}`);
+      const pl = (x) => (adv() ? x.plan : simpleOf(x).plan);
+      const real = (x) => (!adv() && x.simple ? x.simple.source !== "nessuno" : x.nSide > 0 || x.level === "guida");
+      const lines = SIDES.filter(([sd]) => hasPlan(pl(r[sd])) && real(r[sd])).map(([sd, , ab]) => `${ab}: ${planLineShort(pl(r[sd]))}${confSuffix(r[sd])}`);
       if (lines.length) blocks.push(`*vs ${r.name}*\n${lines.join("\n")}`);
     }
     return blocks.length ? [`*Piano sideboard · ${X.c.deck ? X.c.deck.name : ""}${X.c.ver ? ` · ${X.c.ver.name}` : ""}*`, ...blocks].join("\n\n") : "";
@@ -364,6 +416,7 @@
     if (!row || !side) return;
     const { plan } = shownPlan(row, side), label = SIDES.find((s) => s[0] === side)[1];
     if (act === "edit") {
+      if (!adv()) return;
       P.edit[side] = P.edit[side] ? null : clonePlan(plan);
       drawSide(side);
     } else if (act === "copy") {
@@ -411,14 +464,14 @@
 
     root.innerHTML = `
       <div class="page-head"><h1>Piano sideboard <span class="muted" style="font-weight:500">· ${esc(deck.name)}</span></h1>
-        <div class="inline no-print"><button class="btn" id="pn-copyall" title="Copia i piani dei matchup visibili nella lista (restringi con ricerca o gruppi)"${X.rows.length ? "" : " disabled"}>📋 Copia piani</button></div></div>
+        <div class="inline no-print">${isOwner() ? `<span class="pn-viewtog" role="group" aria-label="Vista">${adv() ? `<span class="pn-advbadge">Modalità avanzata</span>` : ""}<button type="button" class="pn-vt${adv() ? "" : " on"}" data-view="user" aria-pressed="${!adv()}">Vista utenti</button><button type="button" class="pn-vt${adv() ? " on" : ""}" data-view="adv" aria-pressed="${adv()}">Vista avanzata</button></span>` : ""}<button class="btn" id="pn-copyall" title="Copia i piani dei matchup visibili nella lista (restringi con ricerca o gruppi)"${X.rows.length ? "" : " disabled"}>📋 Copia piani</button></div></div>
       ${A.sbNavHTML ? A.sbNavHTML("plan") : ""}
       <div class="pn-meta no-print">
         <label class="pn-ver">Lista <select id="pn-ver" aria-label="Versione della lista">${c.versions.length ? c.versions.map((v) => `<option value="${esc(v.id)}"${c.ver && v.id === c.ver.id ? " selected" : ""}>${esc(v.name)}${v.is_active ? " (attiva)" : ""}</option>`).join("") : `<option value="">Nessuna lista</option>`}</select></label>
         <span class="muted small" id="pn-fresh">${esc(fresh)}</span></div>
-      ${mocked() ? `<div class="pn-soon" role="status"><b>Motore in arrivo.</b> Stai vedendo un'anteprima con dati semplificati: percentuali e “perché” non sono ancora quelli veri.</div>` : ""}
+      ${mocked() && adv() ? `<div class="pn-soon" role="status"><b>Motore in arrivo.</b> Stai vedendo un'anteprima con dati semplificati: percentuali e “perché” non sono ancora quelli veri.</div>` : ""}
       ${X.err ? `<div class="card empty-state"><p>Non riesco a calcolare i piani con i dati attuali. Riprova più tardi o apri le <a href="#sideboard">statistiche</a>.</p></div>` : ""}
-      <details class="card pn-deck" id="pn-deck"${P.deckOpen ? " open" : ""}><summary>Il mazzo <span class="muted small">core, carte che cambiano, versioni</span></summary><div id="pn-deck-body"></div></details>
+      <details class="card pn-deck" id="pn-deck"${P.deckOpen ? " open" : ""}><summary>Il mazzo <span class="muted small">${adv() ? "core, carte che cambiano, versioni" : "carte base e modifiche"}</span></summary><div id="pn-deck-body"></div></details>
       ${X.err ? "" : !X.rows.length ? `<div class="card empty-state"><p>Nessun matchup da mostrare: serve almeno una partita contro un archetipo o una guida scritta.</p>${canEdit() ? `<a class="btn primary" href="#add">+ Registra una partita</a>` : ""}</div>` : `
       <div class="pn-grid">
         <aside class="card pn-pick no-print" aria-label="Scegli il matchup">
@@ -433,6 +486,7 @@
     rootEl.onclick = null;
     if (P.deckOpen) drawDeck();
     $("#pn-deck", root).addEventListener("toggle", (e) => { P.deckOpen = e.target.open; if (P.deckOpen) drawDeck(); });
+    root.querySelectorAll(".pn-vt").forEach((b) => { b.onclick = () => { const u = b.dataset.view === "user"; if (u === P.userView) return; P.userView = u; refresh(); }; });
     const ver = $("#pn-ver", root);
     if (ver) ver.onchange = () => { P.verId = ver.value; P.edit = { play: null, draw: null }; refresh(); };
     const ca = $("#pn-copyall", root);

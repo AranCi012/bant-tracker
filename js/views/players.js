@@ -29,6 +29,33 @@
 .pl-low { opacity: .75; }
 .pl-note { margin: 0 0 12px; }
 .pl-back { display: inline-block; margin-bottom: 4px; }
+/* Bravura dei giocatori avversari */
+.rt-intro { margin: 0 0 10px; }
+.rt-filters { gap: 6px; }
+.rt-chip { font: inherit; font-size: .85rem; padding: 6px 12px; min-height: 36px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); cursor: pointer; white-space: nowrap; }
+.rt-chip b { font-weight: 600; opacity: .8; }
+.rt-chip.on { background: var(--text); color: var(--surface); border-color: var(--text); }
+.rt-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rt-count { margin-left: auto; font-size: .85rem; }
+.rt-badge { display: inline-block; font-size: .78rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
+.rt-badge.rt-forte { color: var(--win); border-color: color-mix(in srgb, var(--win) 40%, transparent); background: color-mix(in srgb, var(--win) 14%, transparent); }
+.rt-badge.rt-scarso { color: var(--loss); border-color: color-mix(in srgb, var(--loss) 40%, transparent); background: color-mix(in srgb, var(--loss) 12%, transparent); }
+.rt-badge.rt-none { color: var(--text-3); background: transparent; font-weight: 600; }
+.rt-seg { display: inline-flex; max-width: 100%; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.rt-seg button { font: inherit; font-size: .8rem; font-weight: 600; padding: 6px 8px; min-width: 40px; min-height: 36px; border: 0; background: transparent; color: var(--text-2); cursor: pointer; white-space: nowrap; }
+.rt-seg button + button { border-left: 1px solid var(--border); }
+.rt-seg button:hover { background: var(--surface-2); }
+.rt-seg button.on { background: var(--text); color: var(--surface); }
+.rt-seg button.on.rt-forte { background: var(--win); color: #fff; }
+.rt-seg button.on.rt-scarso { background: var(--loss); color: #fff; }
+.rt-seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rt-card { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.rt-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.rt-label { font-weight: 700; color: var(--text-2); font-size: .9rem; }
+.rt-hint { margin: 0; }
+.rt-notes { width: 100%; box-sizing: border-box; min-height: 72px; font-family: inherit; font-size: .95rem; }
+.rt-notes-row { display: flex; justify-content: flex-end; gap: 8px; }
+.rt-ro { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; margin: 0; }
 @media (max-width: 640px) {
   .pl-search { min-width: 0; width: 100%; }
   .pl-table, .pl-table tbody { display: block; width: 100%; }
@@ -44,6 +71,9 @@
   .pl-table td.cell small { display: inline; margin-left: 6px; }
   .pl-chips { justify-content: flex-end; }
   .pl-table td.pl-chipcell { flex-wrap: wrap; }
+  .pl-table td.rt-cell { align-items: center; }
+  .rt-seg button { padding: 6px 7px; min-height: 40px; }
+  .rt-count { margin-left: 0; width: 100%; }
 }
 @media (max-width: 560px) {
   .seg a { flex: 1; }
@@ -96,30 +126,84 @@
       .join("");
   }
 
+  // ---- Bravura (-1 scarso, 0 medio, 1 forte, null = non valutato) ---------
+  const RT = [
+    { v: 1, label: "Forte", cls: "forte" },
+    { v: 0, label: "Medio", cls: "medio" },
+    { v: -1, label: "Scarso", cls: "scarso" },
+  ];
+  const ratingOf = (name) => { const r = A.oppRating(name); return r == null || r === "" ? null : Number(r); };
+  const notesOf = (name) => {
+    const k = A.oppKey(name);
+    const row = A.S.oppRatings.find((x) => x.key === k);
+    return row && row.notes ? String(row.notes) : "";
+  };
+  const ratingBadge = (r) => {
+    const x = RT.find((y) => y.v === r);
+    return x ? `<span class="rt-badge rt-${x.cls}">${x.label}</span>` : `<span class="rt-badge rt-none" title="Non valutato">—</span>`;
+  };
+  // Controllo segmentato (solo per chi può modificare)
+  const ratingControl = (name, r) => `<div class="rt-seg" role="group" aria-label="Bravura di ${esc(name)}" data-name="${esc(name)}" data-cur="${r == null ? "" : r}">
+    ${RT.map((x) => `<button type="button" class="rt-${x.cls}${r === x.v ? " on" : ""}" data-r="${x.v}" aria-pressed="${r === x.v}">${x.label}</button>`).join("")}
+    <button type="button" class="rt-none${r == null ? " on" : ""}" data-r="" aria-pressed="${r == null}" title="Non valutato">—</button>
+  </div>`;
+
+  // Salva la bravura (null = togli). Con conferma se si cancellano anche le note. Poi ridisegna.
+  function saveRating(name, next, redraw) {
+    if (!A.canEdit()) { A.toast("Sola lettura: non puoi modificare"); return; }
+    if (next == null && notesOf(name) && !window.confirm("Togliere la bravura cancella anche le note. Continuare?")) return;
+    A.guard(async () => { await A.saveOppRating(name, next); A.toast("Salvato"); redraw(); });
+  }
+  function bindRating(root, redraw) {
+    $$(".rt-seg", root).forEach((seg) => $$("button", seg).forEach((b) => (b.onclick = (e) => {
+      e.stopPropagation();
+      const next = b.dataset.r === "" ? null : Number(b.dataset.r);
+      if (String(next ?? "") === seg.dataset.cur) return;
+      saveRating(seg.dataset.name, next, redraw);
+    })));
+  }
+
   // ---- Elenco ---------------------------------------------------------------
+  // Filtri della lista: conservati tra un ridisegno e l'altro
+  let rtFilter = "all"; // all | 1 | 0 | -1 | none
+  let plQ = "";
+
   function viewList(root) {
     const all = A.deckMatches();
     const ms = A.filtered();
     const groups = groupPlayers(ms)
-      .map((g) => ({ ...g, s: A.stats(g.ms) }))
+      .map((g) => ({ ...g, s: A.stats(g.ms), r: ratingOf(g.name) }))
       .sort((x, y) => y.s.n - x.s.n || x.name.localeCompare(y.name));
     const unnamed = ms.filter((m) => !clean(m.opponent)).length;
     const anyNamed = all.some((m) => clean(m.opponent));
+
+    const cnt = { all: groups.length, "1": 0, "0": 0, "-1": 0, none: 0 };
+    for (const g of groups) { if (g.r == null) cnt.none++; else cnt[String(g.r)]++; }
+    const rated = groups.length - cnt.none;
+    const shown = groups.filter((g) => rtFilter === "all" || (rtFilter === "none" ? g.r == null : g.r === Number(rtFilter)));
+    const editable = A.canEdit();
+
+    const chips = [["all", "Tutti", cnt.all], ["1", "Forti", cnt["1"]], ["0", "Medi", cnt["0"]], ["-1", "Scarsi", cnt["-1"]], ["none", "Non valutati", cnt.none]];
+    const chipsHtml = chips.map(([k, label, n]) => `<button type="button" class="rt-chip${rtFilter === k ? " on" : ""}" data-rf="${k}" aria-pressed="${rtFilter === k}">${label} <b>${n}</b></button>`).join("");
+    const ratedTxt = `${rated} ${rated === 1 ? "avversario valutato" : "avversari valutati"} su ${groups.length}`;
 
     const body = !anyNamed
       ? `<div class="card empty-state"><p>Nessun nome avversario registrato.</p>
           <p class="muted small">Apri un match dallo Storico e compila il campo “Nome avversario” (nick MTGO o nome): qui vedrai ogni avversario con le statistiche contro di lui.</p>
           <a class="btn" href="#history">Vai allo Storico</a></div>`
       : `<div class="card">
-          <div class="pl-bar"><input type="search" id="pl-q" class="pl-search" placeholder="Cerca giocatore…" aria-label="Cerca giocatore" autocomplete="off"></div>
-          ${groups.length ? `<div class="table-wrap"><table class="pl-table">
-            <thead><tr><th>Giocatore</th><th class="r">Match</th><th class="r">V–P</th><th style="text-align:center">Win rate</th><th>Mazzi giocati</th><th>Ultima volta</th><th>Incontrato da</th></tr></thead>
-            <tbody>${groups.map((g) => {
+          <p class="muted rt-intro">Indica quanto è forte ogni avversario: le statistiche delle sidate peseranno di più le vittorie contro i forti e le sconfitte contro gli scarsi.</p>
+          <div class="pl-bar"><input type="search" id="pl-q" class="pl-search" placeholder="Cerca giocatore…" aria-label="Cerca giocatore" autocomplete="off" value="${esc(plQ)}"></div>
+          <div class="pl-bar rt-filters" role="group" aria-label="Filtra per bravura">${chipsHtml}<span class="muted rt-count" id="rt-count">${ratedTxt}</span></div>
+          ${shown.length ? `<div class="table-wrap"><table class="pl-table">
+            <thead><tr><th>Giocatore</th><th>Bravura</th><th class="r">Match</th><th class="r">V–P</th><th style="text-align:center">Win rate</th><th>Mazzi giocati</th><th>Ultima volta</th><th>Incontrato da</th></tr></thead>
+            <tbody>${shown.map((g) => {
               const low = g.s.n < A.LOW_N;
               const href = `#players/${encodeURIComponent(g.key)}`;
               const ours = [...new Set(g.ms.map((m) => m.player).filter(Boolean))].sort((a, b) => a.localeCompare(b));
               return `<tr class="click pl-row" data-search="${esc(g.key)}" data-href="${esc(href)}">
                 <td class="pl-name" data-label="Giocatore"><a href="${esc(href)}">${esc(g.name)}</a></td>
+                <td class="rt-cell" data-label="Bravura">${editable ? ratingControl(g.name, g.r) : ratingBadge(g.r)}</td>
                 <td class="r num" data-label="Match">${g.s.n}${low ? ` <span class="muted small">pochi dati</span>` : ""}</td>
                 <td class="r num" data-label="V–P">${recordShort(g.s)}</td>
                 ${withLabel(A.heatCell(g.s.wr, g.s.W, g.s.n, g.name, A.record(g.s), g.s.n), "Win rate")}
@@ -141,20 +225,27 @@
 
     A.bindFilters(root, () => viewList(root));
 
+    // Ricerca per nome: aggiorna solo le righe (così il campo non perde il focus)
     const q = $("#pl-q", root);
-    if (q) q.oninput = () => {
-      const needle = keyOf(q.value);
-      let shown = 0;
+    const applySearch = () => {
+      const needle = keyOf(plQ);
+      let hits = 0;
       $$(".pl-row", root).forEach((tr) => {
         const hit = !needle || tr.dataset.search.includes(needle);
         tr.hidden = !hit;
-        if (hit) shown++;
+        if (hit) hits++;
       });
       const nores = $("#pl-nores", root);
-      if (nores) nores.hidden = shown > 0;
+      if (nores) nores.hidden = hits > 0;
     };
+    if (q) q.oninput = () => { plQ = q.value; applySearch(); };
+    applySearch();
+
+    $$(".rt-chip", root).forEach((b) => (b.onclick = () => { rtFilter = b.dataset.rf; viewList(root); }));
+    bindRating(root, () => viewList(root));
+
     $$(".pl-row", root).forEach((tr) => (tr.onclick = (e) => {
-      if (!e.target.closest("a")) location.hash = tr.dataset.href;
+      if (!e.target.closest("a, button")) location.hash = tr.dataset.href;
     }));
   }
 
@@ -173,6 +264,10 @@
     const s = A.stats(ms);
     const low = s.n < A.LOW_N;
 
+    const r = ratingOf(name);
+    const notes = notesOf(name);
+    const editable = A.canEdit();
+
     const archs = A.byArchetype(ms);
     const mine = new Map();
     for (const m of ms) {
@@ -187,6 +282,18 @@
     root.innerHTML = `
       <div class="pl-top"><a href="#players" class="small pl-back">← Giocatori</a></div>
       <div class="page-head"><h1>vs ${esc(name)} <span class="muted" style="font-weight:500">· ${esc(A.currentDeck().name)}</span></h1></div>
+      <div class="card rt-card">
+        <div class="rt-head">
+          <span class="rt-label">Bravura</span>
+          ${editable ? ratingControl(name, r) : ratingBadge(r)}
+        </div>
+        ${editable
+          ? (r == null
+            ? `<p class="muted small rt-hint">Assegna una bravura per poter scrivere le note.</p>`
+            : `<textarea class="rt-notes" id="rt-notes" aria-label="Note su ${esc(name)}" placeholder="Note: perché è forte o scarso, come gioca…">${esc(notes)}</textarea>
+               <div class="rt-notes-row"><button type="button" class="btn" id="rt-save" disabled>Salva note</button></div>`)
+          : (notes ? `<p class="rt-ro">${esc(notes)}</p>` : "")}
+      </div>
       ${A.filtersHTML()}
       ${!ms.length ? `<div class="card empty-state"><p>Nessun match contro ${esc(name)} con questi filtri.</p></div>` : `
         ${low ? `<p class="muted small pl-note">Pochi dati: meno di ${A.LOW_N} match, le percentuali sono indicative.</p>` : ""}
@@ -222,6 +329,20 @@
         </div>
         <div class="card"><h2>Match</h2>${A.matchTable(A.chrono(ms).reverse())}</div>`}`;
 
+    bindRating(root, () => viewDetail(root, arg));
+    const ta = $("#rt-notes", root), sv = $("#rt-save", root);
+    if (ta && sv) {
+      const saved = notes.trim();
+      ta.oninput = () => { sv.disabled = ta.value.trim() === saved; };
+      sv.onclick = () => {
+        if (!A.canEdit()) { A.toast("Sola lettura: non puoi modificare"); return; }
+        A.guard(async () => {
+          await A.saveOppRating(name, r, ta.value.trim());
+          A.toast("Salvato");
+          viewDetail(root, arg);
+        });
+      };
+    }
     A.bindFilters(root, () => viewDetail(root, arg));
     A.bindMatchRows(root);
   }

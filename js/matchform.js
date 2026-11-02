@@ -269,7 +269,19 @@
       const box = $("#opp-hist", root); if (!box) return;
       const k = oppKey(form.opponent.value);
       const prev = k ? A.chrono(S.matches.filter((x) => x.id !== m.id && oppKey(x.opponent) === k)).reverse() : [];
-      if (!prev.length) { box.innerHTML = k.length >= 3 ? `<span class="muted small">Mai incontrato prima.</span>` : ""; return; }
+      // Valutazione della bravura (Forte / Medio / Scarso): si può dare subito, mentre si registra il match
+      const rateHTML = () => {
+        if (k.length < 3) return "";
+        const r = A.oppRating(form.opponent.value), opt = [[1, "Forte"], [0, "Medio"], [-1, "Scarso"]];
+        if (!A.canEdit()) return r == null ? "" : `<span class="small muted">Bravura: <b>${opt.find((o) => o[0] === r)[1]}</b></span>`;
+        return `<span class="oh-rate small"><span class="muted">Com'era?</span> <span class="seg">${opt.map(([v, l]) => `<button type="button" data-rate="${v}" class="${r === v ? "on" : ""}">${l}</button>`).join("")}</span></span>`;
+      };
+      const bindRate = () => A.$$("[data-rate]", box).forEach((b) => (b.onclick = () => A.guard(async () => {
+        const v = +b.dataset.rate, cur = A.oppRating(form.opponent.value);
+        await A.saveOppRating(form.opponent.value, cur === v ? null : v);
+        renderOppHistory();
+      })));
+      if (!prev.length) { box.innerHTML = k.length >= 3 ? `<div class="oh-card"><span class="muted small">Mai incontrato prima.</span>${rateHTML()}</div>` : ""; bindRate(); return; }
       const byA = new Map();
       for (const x of prev) { if (!byA.has(x.archetype_id)) byA.set(x.archetype_id, []); byA.get(x.archetype_id).push(x); }
       const last = prev[0], lastArch = A.archById(last.archetype_id), deckOf = (x) => (S.decks.find((d) => d.id === x.deck_id) || {}).name;
@@ -281,7 +293,8 @@
       const r = A.matchResult(last);
       box.innerHTML = `<div class="oh-card">👤 <b>Già affrontato ${prev.length === 1 ? "1 volta" : prev.length + " volte"}</b>: ${parts}
         <div class="muted small">Ultima volta ${A.fmtDate(last.played_at)}: ${esc(lastArch ? lastArch.name : "?")}, ${r === "W" ? "vinto" : r === "L" ? "perso" : "pari"} da ${esc(last.player)}${multiDeck && deckOf(last) ? ` con ${esc(deckOf(last))}` : ""}.</div>
-        ${lastArch && form.archetype_id.value !== lastArch.id ? `<button type="button" class="btn sm" id="oh-use">Imposta avversario: ${esc(lastArch.name)}</button>` : ""}</div>`;
+        ${lastArch && form.archetype_id.value !== lastArch.id ? `<button type="button" class="btn sm" id="oh-use">Imposta avversario: ${esc(lastArch.name)}</button>` : ""}${rateHTML()}</div>`;
+      bindRate();
       const use = $("#oh-use", box);
       if (use) use.onclick = () => { form.archetype_id.value = lastArch.id; form.archetype_id.dispatchEvent(new Event("change")); renderOppHistory(); };
     }

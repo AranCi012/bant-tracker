@@ -8,6 +8,8 @@ Dashboard per registrare e analizzare le partite dei nostri mazzi di Magic (Lega
 - **Dashboard**: in alto l'illustrazione della carta simbolo del mazzo (scelta automatica o da "Gestisci mazzi"), poi win rate di match e di game, pre-board e post-board, on the play e on the draw, andamento nel tempo, win rate per matchup, quanto spesso incontrate ogni archetipo, matrice "G1 → esito del match".
 - **Matchup**: matrice a colori matchup × situazione (match, game, G1, G2-3, play, draw), più la matrice giocatore × matchup. Cliccando un matchup vedi il dettaglio.
 - **Piano sideboard** (scheda Sideboard): per ogni matchup, on the play e on the draw, il piano consigliato calcolato dalle sidate registrate (quelle che hanno reso di più, con stima prudente quando i dati sono pochi: in quel caso si appoggia a lato opposto, gruppo di mazzi simili e guida scritta), la stima del win rate post-board accanto al risultato osservato, alternative, "Prova modifiche" con stima al volo, "Usa come guida", e il pannello "Il mazzo" con core, carte che cambiano e storia delle versioni. Si aggiorna da solo a ogni nuova sidata.
+- **Due livelli di lettura del piano**: gli utenti vedono solo "In media ha funzionato meglio" con le carte e il risultato; chi gestisce l'app apre il link `#owner=on` per vedere i dettagli (stime, fiducia, alternative, prova modifiche). `#owner=off` torna alla vista semplice.
+- **Bravura degli avversari**: in Giocatori (o nel form, accanto al nome) si indica Forte / Medio / Scarso; il piano sideboard pesa di più le vittorie contro i forti e le sconfitte contro gli scarsi.
 - **Sideboard**: guida di sideboard per ogni matchup, separata on the play e on the draw; statistiche delle sidate (win rate post-board per piano e per singola carta, guida seguita o no); export in Markdown, CSV e stampa/PDF.
 - **Sidate dalle note**: se nelle note scrivi la sidata a parole tue ("side otd: +3 carpet +1 erode; -2 fow -2 fon", "2 stifle out, 2 priest in", "metti le wrath"), l'app la legge da sola: capisce abbreviazioni (fow, fon, stp), parole italiane, play/draw (otp/otd) e i soprannomi che le insegni ("spighe" = Up the Beanstalk), e ignora le carte dell'avversario. Propone, tu confermi o correggi. Per i match già registrati c'è la pagina Sideboard → "Sidate dalle note".
 - **Statistiche delle sidate**: per ogni matchup e separatamente on the play / on the draw, le carte **chiave** (entrano/escono quasi sempre), **di routine** e **occasionali**, la sidata tipica e un riassunto in frasi ("in media entrano 3,8 carte…").
@@ -37,7 +39,7 @@ Servono due servizi gratuiti:
 
 1. Registrati su <https://supabase.com> e clicca **New project** (piano Free, regione `eu-central`).
 2. Apri `supabase/schema.sql` e alla riga `CAMBIAMI-metti-una-password` metti il **codice del gruppo** che darai ai tuoi amici.
-3. Su Supabase vai in **SQL Editor → New query**, incolla tutto il file e premi **Run**. Poi fai lo stesso, in ordine, con i file in `supabase/migrations/` (002, 003, 004).
+3. Su Supabase vai in **SQL Editor → New query**, incolla tutto il file e premi **Run**. Poi fai lo stesso, in ordine, con i file in `supabase/migrations/` (002, 003, 004, 005).
 4. Vai in **Project Settings → API** (o **Data API / API Keys**) e copia:
    - **Project URL** (`https://xxxx.supabase.co`)
    - la chiave **publishable** o **anon public** (non la `service_role` o `secret`!)

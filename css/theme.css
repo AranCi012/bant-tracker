@@ -173,3 +173,7 @@ body.readonly [data-edit] { display: none !important; }
   background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
 #who[hidden] { display: none !important; }
 .deck-row-r { gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+/* Valutazione rapida dell'avversario nel form */
+.oh-rate { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.oh-rate .seg button { padding: 4px 10px; min-height: 0; font-size: .82rem; }
+.oh-rate .seg button.on { background: var(--text); color: var(--surface); }
